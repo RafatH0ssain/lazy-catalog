@@ -1,0 +1,18 @@
+#!/usr/bin/env zsh
+# lazy-catalog — catalogue a local film and TV library.
+#
+#   lazy-catalog init      set up the config and TMDB key
+#   lazy-catalog update    catalogue anything new
+#   lazy-catalog rebuild   discard the cache and start over
+#   lazy-catalog status    what the catalogue currently knows
+#
+# The repo is wherever this script lives, so the checkout can move and nothing
+# here is tied to one machine.
+
+set -e
+
+REPO="${0:A:h:h}"
+PYTHON="${LAZY_CATALOG_PYTHON:-python3}"
+
+cd "$REPO"
+exec "$PYTHON" -m lazycatalog "$@"

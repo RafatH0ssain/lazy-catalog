@@ -1,0 +1,92 @@
+import io
+import json
+import unittest
+import urllib.error
+
+from lazycatalog import llm
+
+
+class FakeResponse(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+        return False
+
+
+def responder(text):
+    def opener(request, timeout=None):
+        return FakeResponse(json.dumps({"response": text}).encode())
+    return opener
+
+
+def failing(request, timeout=None):
+    raise urllib.error.URLError("connection refused")
+
+
+class MoodTagTest(unittest.TestCase):
+    def call(self, text):
+        return llm.mood_tags("http://x", "m", "Her", 2013, ["Drama"], "A man...",
+                             opener=responder(text))
+
+    def test_plain_comma_list(self):
+        self.assertEqual(self.call("melancholy, warm, slow burn"),
+                         ["melancholy", "warm", "slow burn"])
+
+    def test_strips_a_chatty_preamble(self):
+        self.assertEqual(
+            self.call("Sure! Here are the tags:\nlonely, tender, sad"),
+            ["lonely", "tender", "sad"])
+
+    def test_drops_punctuation_and_caps(self):
+        self.assertEqual(self.call("Bleak., TENSE!"), ["bleak", "tense"])
+
+    def test_caps_at_four_tags(self):
+        self.assertEqual(len(self.call("a1, b2, c3, d4, e5, f6")), 4)
+
+    def test_ollama_being_down_is_not_fatal(self):
+        self.assertEqual(
+            llm.mood_tags("http://x", "m", "Her", 2013, [], "", opener=failing), [])
+
+
+class CleanNameTest(unittest.TestCase):
+    def test_extracts_json(self):
+        out = llm.clean_name("http://x", "m", "xX_thing_Xx",
+                             opener=responder('{"title": "The Thing", "year": 1982}'))
+        self.assertEqual(out, ("The Thing", 1982))
+
+    def test_tolerates_surrounding_prose(self):
+        out = llm.clean_name("http://x", "m", "junk",
+                             opener=responder('Here you go: {"title": "Dogma", "year": null} done'))
+        self.assertEqual(out, ("Dogma", None))
+
+    def test_absurd_year_is_discarded_but_title_kept(self):
+        out = llm.clean_name("http://x", "m", "junk",
+                             opener=responder('{"title": "Dogma", "year": 12}'))
+        self.assertEqual(out, ("Dogma", None))
+
+    def test_unparseable_reply_gives_none(self):
+        self.assertIsNone(
+            llm.clean_name("http://x", "m", "junk", opener=responder("no idea")))
+
+    def test_empty_title_gives_none(self):
+        self.assertIsNone(
+            llm.clean_name("http://x", "m", "junk",
+                           opener=responder('{"title": "", "year": 1999}')))
+
+
+class ListModelsTest(unittest.TestCase):
+    def test_returns_names(self):
+        def opener(request, timeout=None):
+            return FakeResponse(json.dumps(
+                {"models": [{"name": "gemma3:12b"}, {"name": "camus:latest"}]}).encode())
+        self.assertEqual(llm.list_models("http://x", opener=opener),
+                         ["gemma3:12b", "camus:latest"])
+
+    def test_ollama_down_gives_an_empty_list(self):
+        self.assertEqual(llm.list_models("http://x", opener=failing), [])
+
+
+if __name__ == "__main__":
+    unittest.main()

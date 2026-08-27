@@ -1,0 +1,8 @@
+{
+  "library_path": "~/TV",
+  "tmdb_api_key": "",
+  "ollama_host": "http://localhost:11434",
+  "ollama_model": "huihui_ai/mistral-small-abliterated:24b",
+  "language": "en-US",
+  "subtitle_languages": ["en"]
+}

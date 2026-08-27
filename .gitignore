@@ -1,0 +1,17 @@
+# Secrets — the real config lives in ~/.config/lazy-catalog/, never in the repo.
+config.json
+
+# Generated state
+.lazy/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+*.egg-info/
+
+# macOS
+.DS_Store

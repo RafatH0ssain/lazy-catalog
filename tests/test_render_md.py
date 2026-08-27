@@ -1,0 +1,92 @@
+import unittest
+from datetime import datetime
+
+from lazycatalog import cache, render_md
+
+
+def film(key, title, year, **kw):
+    rec = cache.new_record(key, title, year, "film")
+    rec["status"] = "ready"
+    rec.update(kw)
+    return rec
+
+
+class RenderTest(unittest.TestCase):
+    def test_film_entry_has_facts_and_anchor(self):
+        rec = film("The.Thing.1982.REMASTERED", "The Thing", 1982,
+                   genres=["Horror", "Sci-Fi"], runtime=109, rating=8.2,
+                   overview="A research team is hunted.", enriched=True,
+                   moods=["bleak", "paranoid"], total_size=12_400_000_000,
+                   tmdb_url="https://www.themoviedb.org/movie/1091",
+                   tech={"resolution": "1080p", "video": "h264",
+                         "audio": "AAC", "channels": "5.0", "subs": []})
+        out = render_md.render([rec], now=datetime(2026, 8, 28, 14, 32))
+        self.assertIn("**The Thing** (1982)", out)
+        self.assertIn("Horror, Sci-Fi", out)
+        self.assertIn("1h 49m", out)
+        self.assertIn("★ 8.2", out)
+        self.assertIn("*bleak · paranoid*", out)
+        self.assertIn("no subs", out)
+        self.assertIn("11.5 GB", out)
+        self.assertIn("<!--k:The.Thing.1982.REMASTERED-->", out)
+        self.assertIn("2026-08-28 14:32", out)
+
+    def test_unenriched_facts_are_marked_unverified(self):
+        rec = film("X (2020)", "X", 2020, genres=["Drama"], runtime=90,
+                   rating=7.0, enriched=False)
+        out = render_md.render([rec])
+        self.assertIn("~Drama", out)
+        self.assertIn("~★ 7.0", out)
+
+    def test_series_shows_seasons_not_runtime(self):
+        rec = cache.new_record("Adventure Time (2010)", "Adventure Time", 2010, "series")
+        rec.update(status="ready", seasons={"1": 26, "2": 26}, episode_count=52,
+                   genres=["Animation"], enriched=True)
+        out = render_md.render([rec])
+        self.assertIn("Seasons 1–2", out)
+        self.assertIn("52 episodes", out)
+        self.assertIn("## Series", out)
+
+    def test_watched_roundtrips_through_the_file(self):
+        seen = film("Her (2013) [1080p]", "Her", 2013, watched=True)
+        unseen = film("Dogma (1999)", "Dogma", 1999, watched=False)
+        out = render_md.render([seen, unseen])
+        state = render_md.read_watched(out)
+        self.assertEqual(state["Her (2013) [1080p]"], True)
+        self.assertEqual(state["Dogma (1999)"], False)
+
+    def test_watched_survives_a_folder_rename_in_the_heading(self):
+        rec = film("Her (2013) [1080p]", "Her", 2013)
+        out = render_md.render([rec]).replace("- [ ]", "- [x]")
+        self.assertTrue(render_md.read_watched(out)["Her (2013) [1080p]"])
+
+    def test_issues_get_their_own_section(self):
+        rec = film("Broken (2020)", "Broken", 2020, issues=["no video files found"])
+        out = render_md.render([rec])
+        self.assertIn("## Needs attention", out)
+        self.assertIn("no video files found", out)
+
+    def test_stats_line_counts_films_and_series(self):
+        rec_a = film("A (2001)", "A", 2001, total_size=1_073_741_824, runtime=60,
+                     enriched=True)
+        rec_b = cache.new_record("B (2002)", "B", 2002, "series")
+        rec_b["status"] = "ready"
+        out = render_md.render([rec_a, rec_b])
+        self.assertIn("2 titles · 1 films · 1 series", out)
+        self.assertIn("1.0 GB", out)
+
+    def test_empty_library_still_renders(self):
+        out = render_md.render([])
+        self.assertIn("# TV Library", out)
+        self.assertIn("0 titles", out)
+
+    def test_human_size_and_duration(self):
+        self.assertEqual(render_md.human_size(0), "0 B")
+        self.assertEqual(render_md.human_size(1536), "2 KB")
+        self.assertEqual(render_md.human_duration(109), "1h 49m")
+        self.assertEqual(render_md.human_duration(60), "1h")
+        self.assertEqual(render_md.human_duration(None), "")
+
+
+if __name__ == "__main__":
+    unittest.main()
