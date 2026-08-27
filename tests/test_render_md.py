@@ -90,3 +90,34 @@ class RenderTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SubtitleListTest(unittest.TestCase):
+    def test_a_short_list_is_shown_in_full(self):
+        self.assertEqual(render_md.format_subs(["eng", "spa"]), "eng, spa")
+
+    def test_english_is_pulled_to_the_front(self):
+        self.assertEqual(render_md.format_subs(["spa", "fre", "eng"]),
+                         "eng, spa, fre")
+
+    def test_a_long_list_is_truncated_with_a_count(self):
+        codes = ["eng", "ara", "bul", "chi", "cze", "dan", "ger"]
+        self.assertEqual(render_md.format_subs(codes), "eng, ara, bul +4")
+
+    def test_duplicates_are_collapsed(self):
+        self.assertEqual(render_md.format_subs(["eng", "eng", "spa"]), "eng, spa")
+
+    def test_undetermined_is_dropped_when_real_codes_exist(self):
+        self.assertEqual(render_md.format_subs(["und", "eng"]), "eng")
+
+    def test_undetermined_alone_is_still_reported(self):
+        self.assertEqual(render_md.format_subs(["und"]), "und")
+
+    def test_no_subtitles_gives_an_empty_string(self):
+        self.assertEqual(render_md.format_subs([]), "")
+
+    def test_a_thirty_five_track_rip_stays_one_short_line(self):
+        codes = ["eng"] + ["l{}".format(i) for i in range(34)]
+        out = render_md.format_subs(codes)
+        self.assertLess(len(out), 24)
+        self.assertTrue(out.endswith("+32"))

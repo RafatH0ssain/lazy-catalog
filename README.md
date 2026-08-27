@@ -106,6 +106,7 @@ is present. A finished download typically appears within a couple of minutes.
 | `lazy-catalog update --now` | skip the wait for downloads to settle |
 | `lazy-catalog rebuild` | discard the cache and start over, keeping watched ticks |
 | `lazy-catalog status` | what the catalogue currently knows |
+| `lazy-catalog subs --dry-run` | list what's missing subtitles, downloading nothing |
 | `lazy-catalog subs` | download subtitles for titles that have none |
 | `lazy-catalog nfo` | write `.nfo` sidecars for Jellyfin, Kodi and Plex |
 | `lazy-catalog suggest-renames` | report tidier folder names, changing nothing |
@@ -179,7 +180,10 @@ later and your library identifies instantly, with no scraping.
 
 **It doesn't download subtitles automatically.** The free providers are rate
 limited, and a folder-watching loop could burn a day's quota in one sweep.
-`lazy-catalog subs` runs only when you ask.
+`lazy-catalog subs` runs only when you ask, refuses to fetch more than 25 files
+in one go, and `--dry-run` shows the size of the job first. This matters more
+than it sounds: one ten-season series is hundreds of episodes, and an
+unguarded sweep would spend the whole day's quota before reaching the films.
 
 ## Tests
 
@@ -187,7 +191,7 @@ limited, and a folder-watching loop could burn a day's quota in one sweep.
 python3 -m unittest discover -s tests -t . -v
 ```
 
-124 tests, no network, no fixtures to download. The release-name parser is
+139 tests, no network, no fixtures to download. The release-name parser is
 tested against real scene folder names; TMDB, ffprobe and Ollama are mocked.
 
 ## License

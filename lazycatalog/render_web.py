@@ -16,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
-from .render_md import human_duration, human_size
+from .render_md import format_subs, human_duration, human_size
 
 TEMPLATE = Path(__file__).parent / "templates" / "page.html"
 
@@ -34,9 +34,9 @@ def _tech_line(record: Dict[str, Any]) -> str:
     tech = record.get("tech") or {}
     bits = [tech.get("resolution"), tech.get("video"), tech.get("audio"),
             tech.get("channels"), tech.get("hdr")]
-    subs = tech.get("subs") or []
+    subs = format_subs(tech.get("subs") or [])
     if subs:
-        bits.append("subs " + ", ".join(subs))
+        bits.append("subs " + subs)
     elif record.get("external_subs"):
         bits.append("subs external")
     if record.get("total_size"):

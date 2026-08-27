@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from . import config, render_md, scan
+from . import config, probe, render_md, scan
 from .cache import Cache, new_record
 
 CONTENTS_NAME = "CONTENTS.md"
@@ -32,14 +32,39 @@ def _noop(_message: str) -> None:
     pass
 
 
+def _tech_signature(entry: scan.Entry) -> str:
+    """Identifies the file the tech specs were read from."""
+    if not entry.videos:
+        return ""
+    largest = max(entry.videos, key=lambda v: v.size)
+    return "{}:{}".format(largest.path.name, largest.size)
+
+
 def _apply_local_facts(record: Dict[str, Any], entry: scan.Entry) -> None:
-    """Copy across everything the filesystem knows. Always authoritative."""
+    """Copy across everything the filesystem knows. Always authoritative.
+
+    This runs on every pass, not just at first sight, because the disk can
+    change under a title that is already catalogued — a better rip replaces a
+    worse one, subtitles get downloaded, a season is added.
+    """
     record["kind"] = entry.kind
     record["total_size"] = entry.total_size
     record["episode_count"] = entry.episode_count
     record["seasons"] = {str(k): v for k, v in sorted(entry.seasons.items())}
     record["external_subs"] = entry.external_subs
     record["issues"] = list(entry.issues)
+
+    # ffprobe is cheap but not free, so only re-read when the file it described
+    # has actually changed — or when the stored reading predates a fix to how
+    # it was interpreted.
+    signature = _tech_signature(entry)
+    if signature and (signature != record.get("tech_sig")
+                      or record.get("tech_version") != probe.VERSION):
+        tech = probe.describe(entry)
+        if tech:
+            record["tech"] = tech
+            record["tech_sig"] = signature
+            record["tech_version"] = probe.VERSION
 
 
 def update(

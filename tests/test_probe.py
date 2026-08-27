@@ -46,6 +46,59 @@ class SummariseTest(unittest.TestCase):
              "height": 2160}]})
         self.assertEqual(out["resolution"], "2160p")
 
+    def test_widescreen_1080p_is_not_demoted_by_its_letterboxed_height(self):
+        """A 2.35:1 film at 1920 wide is only ~800 tall but is still 1080p."""
+        for width, height in ((1920, 800), (1920, 816), (1920, 806), (1916, 788)):
+            with self.subTest(dims=(width, height)):
+                out = probe.summarise({"streams": [
+                    {"codec_type": "video", "codec_name": "h264",
+                     "width": width, "height": height}]})
+                self.assertEqual(out["resolution"], "1080p")
+
+    def test_narrow_1080p_is_not_demoted_by_its_width(self):
+        """A 1.66:1 film is only 1792 wide but is a full 1080 tall."""
+        out = probe.summarise({"streams": [
+            {"codec_type": "video", "codec_name": "h264",
+             "width": 1792, "height": 1080}]})
+        self.assertEqual(out["resolution"], "1080p")
+
+    def test_either_dimension_can_carry_the_tier(self):
+        cases = [((1920, 800), "1080p"), ((1792, 1080), "1080p"),
+                 ((1918, 1080), "1080p"), ((1920, 1040), "1080p"),
+                 ((1280, 528), "720p"), ((1280, 688), "720p"),
+                 ((1024, 576), "576p"), ((720, 480), "480p")]
+        for (width, height), expected in cases:
+            with self.subTest(dims=(width, height)):
+                out = probe.summarise({"streams": [
+                    {"codec_type": "video", "codec_name": "h264",
+                     "width": width, "height": height}]})
+                self.assertEqual(out["resolution"], expected)
+
+    def test_widescreen_720p_stays_720p(self):
+        for width, height in ((1280, 688), (1280, 528), (1280, 720)):
+            with self.subTest(dims=(width, height)):
+                out = probe.summarise({"streams": [
+                    {"codec_type": "video", "codec_name": "h264",
+                     "width": width, "height": height}]})
+                self.assertEqual(out["resolution"], "720p")
+
+    def test_ultrawide_4k_is_recognised_by_width(self):
+        out = probe.summarise({"streams": [
+            {"codec_type": "video", "codec_name": "hevc", "width": 3840,
+             "height": 1600}]})
+        self.assertEqual(out["resolution"], "2160p")
+
+    def test_standard_definition_is_not_called_hd(self):
+        out = probe.summarise({"streams": [
+            {"codec_type": "video", "codec_name": "h264", "width": 720,
+             "height": 480}]})
+        self.assertEqual(out["resolution"], "480p")
+
+    def test_five_channel_audio_is_named_5_0(self):
+        out = probe.summarise({"streams": [
+            {"codec_type": "audio", "codec_name": "aac", "channels": 5}]})
+        self.assertEqual(out["channels"], "5.0")
+
     def test_unreadable_duration_is_dropped(self):
         out = probe.summarise({"streams": [], "format": {"duration": "N/A"}})
         self.assertNotIn("runtime_sec", out)

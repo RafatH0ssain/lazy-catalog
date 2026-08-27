@@ -108,8 +108,6 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 def _enricher(cfg: Dict[str, Any], report, use_llm: bool = True):
     """Build the callback that fills a record in from TMDB, ffprobe and ollama."""
-    from . import probe
-
     client: Optional[tmdb.Client] = None
     try:
         client = tmdb.Client(cfg["tmdb_api_key"], cfg.get("language", "en-US"))
@@ -121,17 +119,17 @@ def _enricher(cfg: Dict[str, Any], report, use_llm: bool = True):
     model = cfg["ollama_model"]
 
     def enrich(record: Dict[str, Any], entry) -> None:
-        # 1. Local truth first: it never fails and never lies.
-        record["tech"] = probe.describe(entry)
+        # Tech specs are handled by the local-facts pass, which refreshes them
+        # on every run rather than only at first sight.
 
-        # 2. A name the regexes couldn't read gets one model opinion.
+        # 1. A name the regexes couldn't read gets one model opinion.
         if entry.parsed.confidence == "low" and use_llm:
             guessed = llm.clean_name(host, model, entry.key)
             if guessed:
                 record["title"], record["year"] = guessed
                 report("  named by model: {} -> {}".format(entry.key, guessed[0]))
 
-        # 3. Facts.
+        # 2. Facts.
         if client is not None:
             try:
                 found = client.lookup(record["title"], record.get("year"),
@@ -154,7 +152,7 @@ def _enricher(cfg: Dict[str, Any], report, use_llm: bool = True):
                 record.setdefault("issues", []).append("no TMDB match")
                 report("  ? no TMDB match for {}".format(record["title"]))
 
-        # 4. Opinions last, and only when there's something to react to.
+        # 3. Opinions last, and only when there's something to react to.
         if use_llm and not record.get("moods"):
             record["moods"] = llm.mood_tags(
                 host, model, record["title"], record.get("year"),
@@ -301,29 +299,54 @@ def cmd_subs(args: argparse.Namespace) -> int:
         needle = args.title.lower()
         wanted = [r for r in wanted if needle in (r.get("title") or "").lower()]
     if not wanted:
-        _say("Everything already has subtitles.")
+        _say("Nothing is missing subtitles.")
         return 0
 
-    languages = args.lang or cfg.get("subtitle_languages") or ["en"]
+    # Work out the real size of the job first. A single ten-season series is
+    # hundreds of episodes, and the free providers are rate limited per day, so
+    # sweeping the whole library would spend the quota before it got anywhere
+    # useful.
     library = config.library_path(cfg)
-    _say("Looking for {} subtitles for {} title(s).".format(
-        "/".join(languages), len(wanted)))
-
-    found = 0
+    jobs = []
     for record in wanted:
         folder = library / record["key"]
         if not folder.is_dir():
             continue
         entry = scan.scan_folder(folder)
         for video in entry.videos:
-            ok, detail = subs.fetch(video.path, languages)
-            mark = "✓" if ok else "·"
-            _say("  {} {} — {}".format(mark, video.path.name, detail))
-            found += 1 if ok else 0
+            jobs.append((record, video.path))
+
+    languages = args.lang or cfg.get("subtitle_languages") or ["en"]
+    _say("{} file(s) across {} title(s) have no subtitles:".format(
+        len(jobs), len(wanted)))
+    for record in wanted:
+        count = sum(1 for r, _ in jobs if r["key"] == record["key"])
+        _say("  {:>4} × {}".format(count, record.get("title") or record["key"]))
+    _say()
+
+    if args.dry_run:
+        _say("Nothing downloaded. Drop --dry-run to fetch {} subtitles.".format(
+            "/".join(languages)))
+        return 0
+
+    if len(jobs) > args.max and not args.title:
+        _say("That's more than --max ({}), and free subtitle providers cap how".format(
+            args.max))
+        _say("many you can pull per day. Narrow it down or raise the ceiling:")
+        _say("    lazy-catalog subs --title \"Her\"")
+        _say("    lazy-catalog subs --max {}".format(len(jobs)))
+        return 1
+
+    _say("Fetching {} subtitles...".format("/".join(languages)))
+    found = 0
+    for record, path in jobs[:args.max]:
+        ok, detail = subs.fetch(path, languages)
+        _say("  {} {} — {}".format("✓" if ok else "·", path.name, detail))
+        found += 1 if ok else 0
 
     _say()
-    _say("{} subtitle file(s) downloaded. Run `lazy-catalog update` to record them."
-         .format(found))
+    _say("{} of {} found. Run `lazy-catalog update` to record them.".format(
+        found, len(jobs[:args.max])))
     return 0
 
 
@@ -438,6 +461,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub_cmd.add_argument("--lang", action="append",
                          help="language code, repeatable (default: from config)")
     sub_cmd.add_argument("--title", help="only this title")
+    sub_cmd.add_argument("--dry-run", action="store_true",
+                         help="list what's missing without downloading")
+    sub_cmd.add_argument("--max", type=int, default=25,
+                         help="most files to fetch in one run (default: 25)")
 
     nfo_cmd = subparsers.add_parser(
         "nfo", help="write .nfo sidecars for Jellyfin, Kodi and Plex")

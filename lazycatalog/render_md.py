@@ -47,6 +47,29 @@ def human_duration(minutes: Optional[int]) -> str:
     return "{}m".format(mins)
 
 
+def format_subs(subs: Sequence[str], limit: int = 3) -> str:
+    """Name a few subtitle languages and count the rest.
+
+    A streaming rip can carry thirty-five tracks, which is useful to know but
+    unreadable to list. English is pulled to the front because that is the one
+    the answer usually hinges on.
+    """
+    seen: List[str] = []
+    for code in subs:
+        code = (code or "").strip().lower()
+        if code and code not in seen:
+            seen.append(code)
+    if len(seen) > 1 and "und" in seen:
+        seen.remove("und")          # "undetermined" is noise beside real codes
+    if not seen:
+        return ""
+    if "eng" in seen:
+        seen.insert(0, seen.pop(seen.index("eng")))
+    if len(seen) <= limit:
+        return ", ".join(seen)
+    return "{} +{}".format(", ".join(seen[:limit]), len(seen) - limit)
+
+
 def _season_span(seasons: Dict[str, Any]) -> str:
     numbers = sorted(int(n) for n in seasons)
     if not numbers:
@@ -75,9 +98,9 @@ def _tech_line(record: Dict[str, Any]) -> str:
     if tech.get("hdr"):
         bits.append(tech["hdr"])
 
-    subs = tech.get("subs") or []
+    subs = format_subs(tech.get("subs") or [])
     if subs:
-        bits.append("subs: " + ", ".join(subs))
+        bits.append("subs: " + subs)
     elif record.get("external_subs"):
         bits.append("subs: external")
     else:

@@ -15,7 +15,12 @@ from typing import Any, Callable, Dict, List, Optional
 
 TIMEOUT = 60
 
-CHANNEL_NAMES = {1: "1.0", 2: "2.0", 3: "2.1", 6: "5.1", 8: "7.1"}
+# Bumped whenever the interpretation of an ffprobe payload changes, so stored
+# readings are refreshed instead of staying wrong forever.
+VERSION = 3
+
+CHANNEL_NAMES = {1: "1.0", 2: "2.0", 3: "2.1", 4: "4.0", 5: "5.0",
+                 6: "5.1", 7: "6.1", 8: "7.1"}
 
 # Transfer characteristics that mean HDR rather than plain SDR.
 HDR_TRANSFERS = {"smpte2084": "HDR10", "arib-std-b67": "HLG"}
@@ -42,18 +47,31 @@ def _run_ffprobe(path: Path) -> Optional[Dict[str, Any]]:
         return None
 
 
+# Each tier as (label, minimum width, minimum height). A file qualifies on
+# either dimension, so the list is walked top down and the first hit wins.
+#
+# Both dimensions are needed because either one alone gets it wrong: a 2.35:1
+# film at 1920x800 is 1080p despite the short height, and a 1.66:1 film at
+# 1792x1080 is 1080p despite the narrow width. Thresholds sit under the nominal
+# values because encoders round (1916 and 1918 both turn up in the wild).
+RESOLUTION_TIERS = (
+    ("2160p", 3400, 1700),
+    ("1080p", 1800, 950),
+    ("720p", 1200, 620),
+    ("576p", 900, 530),
+    ("480p", 640, 380),
+)
+
+
 def _resolution(height: Optional[int], width: Optional[int]) -> Optional[str]:
-    if not height:
+    width = width or 0
+    height = height or 0
+    if not width and not height:
         return None
-    if height >= 2000 or (width or 0) >= 3800:
-        return "2160p"
-    if height >= 1000:
-        return "1080p"
-    if height >= 700:
-        return "720p"
-    if height >= 500:
-        return "576p"
-    return "{}p".format(height)
+    for label, min_width, min_height in RESOLUTION_TIERS:
+        if width >= min_width or height >= min_height:
+            return label
+    return "{}p".format(height) if height else None
 
 
 def summarise(payload: Dict[str, Any]) -> Dict[str, Any]:
