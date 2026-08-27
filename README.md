@@ -107,6 +107,7 @@ is present. A finished download typically appears within a couple of minutes.
 | `lazy-catalog rebuild` | discard the cache and start over, keeping watched ticks |
 | `lazy-catalog status` | what the catalogue currently knows |
 | `lazy-catalog subs --dry-run` | list what's missing subtitles, downloading nothing |
+| `lazy-catalog subs --films` | subtitles for films only, skipping long series |
 | `lazy-catalog subs` | download subtitles for titles that have none |
 | `lazy-catalog nfo` | write `.nfo` sidecars for Jellyfin, Kodi and Plex |
 | `lazy-catalog suggest-renames` | report tidier folder names, changing nothing |

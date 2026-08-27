@@ -298,6 +298,8 @@ def cmd_subs(args: argparse.Namespace) -> int:
     if args.title:
         needle = args.title.lower()
         wanted = [r for r in wanted if needle in (r.get("title") or "").lower()]
+    if args.kind:
+        wanted = [r for r in wanted if r.get("kind") == args.kind]
     if not wanted:
         _say("Nothing is missing subtitles.")
         return 0
@@ -333,6 +335,7 @@ def cmd_subs(args: argparse.Namespace) -> int:
         _say("That's more than --max ({}), and free subtitle providers cap how".format(
             args.max))
         _say("many you can pull per day. Narrow it down or raise the ceiling:")
+        _say("    lazy-catalog subs --films")
         _say("    lazy-catalog subs --title \"Her\"")
         _say("    lazy-catalog subs --max {}".format(len(jobs)))
         return 1
@@ -465,6 +468,11 @@ def build_parser() -> argparse.ArgumentParser:
                          help="list what's missing without downloading")
     sub_cmd.add_argument("--max", type=int, default=25,
                          help="most files to fetch in one run (default: 25)")
+    sub_cmd.add_argument("--films", dest="kind", action="store_const", const="film",
+                         help="films only, skipping series")
+    sub_cmd.add_argument("--series", dest="kind", action="store_const", const="series",
+                         help="series only")
+    sub_cmd.set_defaults(kind=None)
 
     nfo_cmd = subparsers.add_parser(
         "nfo", help="write .nfo sidecars for Jellyfin, Kodi and Plex")
