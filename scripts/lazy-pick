@@ -1,0 +1,16 @@
+#!/usr/bin/env zsh
+# lazy-pick — ask the local model what to watch tonight.
+#
+#   lazy-pick something short and funny
+#   lazy-pick --unwatched a slow burn I can pay attention to
+#   lazy-pick --films under two hours, nothing bleak
+#
+# Quoting is optional: everything that isn't a flag is the request.
+
+set -e
+
+REPO="${0:A:h:h}"
+PYTHON="${LAZY_CATALOG_PYTHON:-python3}"
+
+cd "$REPO"
+exec "$PYTHON" -m lazycatalog pick "$@"

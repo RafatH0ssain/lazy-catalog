@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+/* A repertory-cinema programme rather than a streaming grid: the library is
+   small and hand-picked, so the page is built for reading and deciding, not
+   for endless scrolling. Type does the work; colour is a darkened auditorium. */
+:root {
+  color-scheme: dark;
+  --house:    #15100f;   /* house lights down, warm not blue */
+  --house-2:  #1d1614;
+  --paper:    #ece2d2;   /* programme stock */
+  --paper-2:  #c9bdac;
+  --dim:      #9d9084;
+  --velvet:   #7d2b3f;   /* seat upholstery */
+  --lamp:     #e0a33c;   /* projector lamp */
+  --rule:     rgba(236,226,210,.13);
+  --rule-2:   rgba(236,226,210,.26);
+  --display: "Bodoni 72", Didot, "Playfair Display", "Times New Roman", serif;
+  --body: "Iowan Old Style", Charter, Georgia, "Times New Roman", serif;
+  --util: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --ease: cubic-bezier(.2,.6,.35,1);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--house); color: var(--paper);
+  font: 15px/1.6 var(--body); -webkit-font-smoothing: antialiased;
+  background-image:
+    radial-gradient(120% 70% at 50% -10%, rgba(125,43,63,.20), transparent 62%),
+    radial-gradient(80% 50% at 100% 0%, rgba(224,163,60,.07), transparent 60%);
+  background-attachment: fixed;
+}
+.wrap { max-width: 1000px; margin: 0 auto; padding: 0 28px 96px; }
+::selection { background: var(--velvet); color: var(--paper); }
+
+/* ---- masthead ---- */
+.masthead { padding: 74px 0 26px; border-bottom: 2px solid var(--rule-2); }
+.eyebrow {
+  font: 400 11px/1 var(--util); letter-spacing: .30em; text-transform: uppercase;
+  color: var(--lamp); margin-bottom: 20px;
+}
+h1 {
+  font-family: var(--display); font-weight: 400; font-size: clamp(40px, 8vw, 74px);
+  line-height: .94; letter-spacing: -.02em; margin: 0 0 20px; max-width: 12ch;
+}
+.ledger {
+  display: flex; flex-wrap: wrap; gap: 0 30px;
+  font: 400 12px/1.9 var(--util); letter-spacing: .06em; color: var(--dim);
+  text-transform: uppercase;
+}
+.ledger b { color: var(--paper); font-weight: 400; }
+
+/* ---- controls ---- */
+.controls {
+  position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap;
+  gap: 10px; align-items: center; padding: 14px 0;
+  background: linear-gradient(180deg, var(--house) 72%, transparent);
+  border-bottom: 1px solid var(--rule);
+}
+.search { position: relative; flex: 1 1 230px; min-width: 170px; }
+.search svg { position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 14px; height: 14px; stroke: var(--dim); fill: none; stroke-width: 1.7; }
+input[type=search] {
+  width: 100%; font: 400 14px/1 var(--util); color: var(--paper);
+  background: transparent; border: 0; border-bottom: 1px solid var(--rule-2);
+  padding: 9px 0 9px 22px; letter-spacing: .02em;
+}
+input[type=search]::placeholder { color: var(--dim); }
+input[type=search]:focus { outline: none; border-bottom-color: var(--lamp); }
+select {
+  font: 400 12px/1 var(--util); letter-spacing: .08em; text-transform: uppercase;
+  color: var(--paper); background: transparent; border: 1px solid var(--rule-2);
+  border-radius: 0; padding: 8px 10px; cursor: pointer;
+}
+select:focus-visible { outline: 2px solid var(--lamp); outline-offset: 2px; }
+option { background: var(--house-2); font-family: var(--body); text-transform: none; }
+
+.tag {
+  font: 400 11px/1 var(--util); letter-spacing: .1em; text-transform: uppercase;
+  cursor: pointer; color: var(--dim); background: transparent;
+  border: 1px solid var(--rule); padding: 7px 11px; border-radius: 0;
+  transition: color .18s var(--ease), border-color .18s var(--ease),
+              background .18s var(--ease);
+}
+.tag:hover { color: var(--paper); border-color: var(--rule-2); }
+.tag[aria-pressed="true"] { background: var(--velvet); border-color: var(--velvet);
+  color: var(--paper); }
+.tag:focus-visible { outline: 2px solid var(--lamp); outline-offset: 2px; }
+.tagrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  padding: 16px 0 0; }
+.tagrow .label { font: 400 10px/1 var(--util); letter-spacing: .2em;
+  text-transform: uppercase; color: var(--dim); margin-right: 6px; opacity: .75; }
+.count { font: 400 11px/1 var(--util); letter-spacing: .16em; text-transform: uppercase;
+  color: var(--dim); padding: 30px 0 6px; }
+
+/* ---- programme rows ---- */
+.listing { border-top: 1px solid var(--rule); }
+.row {
+  display: grid; grid-template-columns: 74px 1fr; gap: 22px; width: 100%;
+  padding: 24px 0; border-bottom: 1px solid var(--rule); cursor: pointer;
+  background: none; border-left: 0; border-right: 0; border-top: 0;
+  color: inherit; text-align: left; font: inherit;
+  animation: fade .5s var(--ease) backwards;
+  transition: background .22s var(--ease);
+}
+@keyframes fade { from { opacity: 0; transform: translateY(8px); } }
+.row:hover, .row:focus-visible { background: rgba(236,226,210,.032); outline: none; }
+.row:focus-visible { box-shadow: inset 2px 0 0 var(--lamp); }
+.plate {
+  aspect-ratio: 2/3; background: var(--house-2); overflow: hidden;
+  border: 1px solid var(--rule); position: relative;
+  transition: border-color .22s var(--ease), transform .3s var(--ease);
+}
+.row:hover .plate { border-color: var(--lamp); transform: translateY(-2px); }
+.plate img { width: 100%; height: 100%; object-fit: cover; display: block;
+  filter: saturate(.92) contrast(1.04); }
+.plate .none { display: flex; align-items: center; justify-content: center;
+  height: 100%; padding: 6px; text-align: center; font: 400 9px/1.3 var(--util);
+  letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 7px; }
+.row h2 { font-family: var(--display); font-weight: 400; font-size: 25px;
+  line-height: 1.1; letter-spacing: -.012em; margin: 0; }
+.year { font: 400 12px/1 var(--util); color: var(--dim); letter-spacing: .08em; }
+.seen { font: 400 9.5px/1 var(--util); letter-spacing: .16em; text-transform: uppercase;
+  color: var(--house); background: var(--paper-2); padding: 4px 7px; }
+.facts { font: 400 11.5px/1.8 var(--util); letter-spacing: .07em;
+  text-transform: uppercase; color: var(--dim); margin-bottom: 10px; }
+.facts .star { color: var(--lamp); }
+.facts .unverified { color: var(--velvet); }
+.synopsis { margin: 0 0 12px; max-width: 62ch; color: var(--paper-2);
+  font-size: 15px; line-height: 1.65; }
+.moods { font: 400 11px/1 var(--util); letter-spacing: .14em; text-transform: uppercase;
+  color: var(--lamp); opacity: .82; margin-bottom: 13px; }
+
+/* The signature: runtime drawn to scale against the longest thing in the
+   library, so "what's short tonight" is answerable without reading a number. */
+.gauge { display: flex; align-items: center; gap: 11px; }
+.gauge .track { flex: 0 1 210px; height: 2px; background: var(--rule); position: relative; }
+.gauge .fill { position: absolute; inset: 0 auto 0 0; background: var(--velvet);
+  transform-origin: left; transform: scaleX(0); animation: draw .8s var(--ease) .15s forwards; }
+@keyframes draw { to { transform: scaleX(1); } }
+.gauge .len { font: 400 11px/1 var(--util); letter-spacing: .1em; color: var(--dim); }
+
+/* ---- plates view ---- */
+.plates { display: grid; gap: 30px 20px; padding-top: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(146px, 1fr)); }
+.plates .row { display: block; grid-template-columns: none; padding: 0;
+  border: 0; background: none; }
+.plates .row:hover { background: none; }
+.plates .aside { display: none; }
+.plates h2 { font-size: 16px; margin-top: 11px; }
+.plates .facts { margin: 3px 0 0; font-size: 10.5px; }
+
+.empty { padding: 70px 0; color: var(--dim); font-style: italic; }
+footer { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--rule);
+  font: 400 11px/1.8 var(--util); letter-spacing: .06em; color: var(--dim); }
+
+/* ---- detail ---- */
+dialog {
+  border: 1px solid var(--rule-2); padding: 0; color: var(--paper);
+  background: var(--house-2); max-width: 720px; width: calc(100% - 32px);
+  overflow: hidden; box-shadow: 0 50px 100px -30px #000;
+}
+dialog::backdrop { background: rgba(8,5,5,.8); }
+dialog[open] { animation: lift .32s var(--ease); }
+@keyframes lift { from { opacity: 0; transform: translateY(14px); } }
+.sheet { position: relative; display: flex; gap: 28px; padding: 34px; }
+.sheet-bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
+.sheet-bg img { width: 100%; height: 100%; object-fit: cover;
+  filter: blur(56px) saturate(1.4); opacity: .28; transform: scale(1.3); }
+.sheet-bg::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(29,22,20,.68), rgba(29,22,20,.96)); }
+.sheet > * { position: relative; z-index: 1; }
+.sheet .art { flex: 0 0 152px; }
+.sheet .art img { width: 100%; display: block; border: 1px solid var(--rule-2); }
+.sheet .art .none { aspect-ratio: 2/3; border: 1px solid var(--rule);
+  display: flex; align-items: center; justify-content: center; padding: 12px;
+  text-align: center; font: 400 10px/1.4 var(--util); color: var(--dim); }
+.sheet .body { flex: 1 1 auto; min-width: 0; }
+.sheet h2 { font-family: var(--display); font-weight: 400; font-size: 30px;
+  line-height: 1.08; letter-spacing: -.02em; margin: 0 0 9px; }
+.sheet .facts { margin-bottom: 15px; }
+.sheet p.overview { margin: 0 0 20px; font-size: 15.5px; line-height: 1.66; }
+.sheet dl { display: grid; grid-template-columns: 74px 1fr; gap: 9px 16px;
+  margin: 0 0 20px; font-size: 13.5px; }
+.sheet dt { font: 400 10px/1.6 var(--util); letter-spacing: .14em;
+  text-transform: uppercase; color: var(--dim); padding-top: 3px; }
+.sheet dd { margin: 0; }
+.sheet dd code { font: 400 11.5px/1.7 var(--util); color: var(--paper-2);
+  letter-spacing: .04em; word-break: break-word; }
+.sheet a.tmdb { font: 400 11px/1 var(--util); letter-spacing: .14em;
+  text-transform: uppercase; color: var(--lamp); text-decoration: none;
+  border-bottom: 1px solid currentColor; padding-bottom: 3px; }
+.close { position: absolute; top: 16px; right: 18px; z-index: 3; width: 28px;
+  height: 28px; background: none; border: 1px solid var(--rule-2); color: var(--paper);
+  font-size: 15px; cursor: pointer; line-height: 1; }
+.close:hover { background: var(--velvet); border-color: var(--velvet); }
+
+@media (max-width: 620px) {
+  .wrap { padding: 0 20px 70px; }
+  .row { grid-template-columns: 56px 1fr; gap: 16px; }
+  .row h2 { font-size: 21px; }
+  .sheet { flex-direction: column; padding: 26px; }
+  .sheet .art { max-width: 124px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+  .gauge .fill { transform: scaleX(1); }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="masthead">
+    <div class="eyebrow">Now showing at home</div>
+    <h1>__TITLE__</h1>
+    <div class="ledger">__STATS__</div>
+  </div>
+
+  <div class="controls">
+    <div class="search">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+      <input type="search" id="q" placeholder="Search title, director, cast, mood"
+             autocomplete="off" spellcheck="false">
+    </div>
+    <select id="sort" aria-label="Sort by">
+      <option value="title">A–Z</option>
+      <option value="year">Newest first</option>
+      <option value="rating">Best rated</option>
+      <option value="runtime">Shortest first</option>
+      <option value="size">Largest file</option>
+      <option value="added">Recently added</option>
+    </select>
+    <button class="tag" id="unwatched" aria-pressed="false">Unwatched</button>
+    <button class="tag" id="view" aria-pressed="false">Plates</button>
+  </div>
+
+  <div class="tagrow" id="kinds"></div>
+  <div class="tagrow" id="genres"></div>
+  <div class="tagrow" id="moods"></div>
+
+  <div class="count" id="count"></div>
+  <div class="listing" id="listing"></div>
+  <div class="empty" id="empty" hidden>Nothing here matches that.</div>
+
+  <footer>__FOOTER__</footer>
+</div>
+
+<dialog id="sheet"><button class="close" aria-label="Close">&times;</button>
+<div id="sheetBody"></div></dialog>
+
+<script>
+const DATA = __DATA__;
+const $ = (id) => document.getElementById(id);
+const state = { q: "", sort: "title", unwatched: false, plates: false,
+                kind: null, genres: new Set(), moods: new Set() };
+
+const LONGEST = Math.max(120, ...DATA.map(d => d.runtime || 0));
+
+function uniq(key) {
+  const seen = new Map();
+  DATA.forEach(d => (d[key] || []).forEach(v => seen.set(v, (seen.get(v) || 0) + 1)));
+  return [...seen.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
+function tag(label, value, group) {
+  const b = document.createElement("button");
+  b.className = "tag";
+  b.textContent = label;
+  b.dataset.group = group;
+  b.dataset.value = value;
+  b.setAttribute("aria-pressed", "false");
+  b.onclick = () => {
+    if (group === "kind") state.kind = state.kind === value ? null : value;
+    else {
+      const set = group === "genre" ? state.genres : state.moods;
+      set.has(value) ? set.delete(value) : set.add(value);
+    }
+    render();
+  };
+  return b;
+}
+
+function buildTags() {
+  [["film", "Films"], ["series", "Series"]].forEach(([value, label]) => {
+    if (DATA.some(d => d.kind === value)) $("kinds").append(tag(label, value, "kind"));
+  });
+  const genres = uniq("genres").slice(0, 12);
+  if (genres.length) {
+    $("genres").insertAdjacentHTML("beforeend", '<span class="label">Genre</span>');
+    genres.forEach(([g]) => $("genres").append(tag(g, g, "genre")));
+  }
+  const moods = uniq("moods").slice(0, 12);
+  if (moods.length) {
+    $("moods").insertAdjacentHTML("beforeend", '<span class="label">Mood</span>');
+    moods.forEach(([m]) => $("moods").append(tag(m, m, "mood")));
+  }
+}
+
+function matches(d) {
+  if (state.unwatched && d.watched) return false;
+  if (state.kind && d.kind !== state.kind) return false;
+  for (const g of state.genres) if (!(d.genres || []).includes(g)) return false;
+  for (const m of state.moods) if (!(d.moods || []).includes(m)) return false;
+  return !state.q || d.haystack.includes(state.q.toLowerCase());
+}
+
+const SORTS = {
+  title: (a, b) => a.sortTitle.localeCompare(b.sortTitle),
+  year: (a, b) => (b.year || 0) - (a.year || 0),
+  rating: (a, b) => (b.rating || 0) - (a.rating || 0),
+  runtime: (a, b) => (a.runtime || 1e6) - (b.runtime || 1e6),
+  size: (a, b) => (b.size || 0) - (a.size || 0),
+  added: (a, b) => (b.added || "").localeCompare(a.added || ""),
+};
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
+function plate(d) {
+  return d.poster
+    ? `<div class="plate"><img loading="lazy" src="${esc(d.poster)}" alt=""></div>`
+    : `<div class="plate"><span class="none">${esc(d.title)}</span></div>`;
+}
+
+function factsHtml(d) {
+  const mark = d.verified ? "" : '<span class="unverified">~</span>';
+  const bits = [];
+  if ((d.genres || []).length) bits.push(mark + esc(d.genres.slice(0, 3).join(" / ")));
+  if (d.kind === "series") { if (d.seasonLine) bits.push(esc(d.seasonLine)); }
+  else if (d.runtimeLabel) bits.push(esc(d.runtimeLabel));
+  if (d.rating) bits.push(`<span class="star">${mark}★ ${d.rating.toFixed(1)}</span>`);
+  return bits.join(" &nbsp;·&nbsp; ");
+}
+
+function row(d) {
+  const b = document.createElement("button");
+  b.className = "row";
+  // Films only: a series' runtime is one episode's, which would draw a
+  // ten-season show as the shortest thing in the library.
+  const gauge = (d.runtime && d.kind === "film" && !state.plates)
+    ? `<div class="gauge"><div class="track"><div class="fill"
+         style="width:${Math.round((d.runtime / LONGEST) * 100)}%"></div></div>
+       <span class="len">${esc(d.runtimeLabel)}</span></div>`
+    : "";
+  b.innerHTML = `${plate(d)}
+    <div class="aside-wrap">
+      <div class="head">
+        <h2>${esc(d.title)}</h2>
+        ${d.year ? `<span class="year">${d.year}</span>` : ""}
+        ${d.watched ? '<span class="seen">seen</span>' : ""}
+      </div>
+      <div class="facts">${factsHtml(d)}</div>
+      <div class="aside">
+        ${d.overview ? `<p class="synopsis">${esc(d.overview)}</p>` : ""}
+        ${(d.moods || []).length ? `<div class="moods">${esc(d.moods.join(" · "))}</div>` : ""}
+        ${gauge}
+      </div>
+    </div>`;
+  b.onclick = () => openSheet(d);
+  return b;
+}
+
+function render() {
+  const shown = DATA.filter(matches).sort(SORTS[state.sort]);
+  const listing = $("listing");
+  listing.className = state.plates ? "plates" : "listing";
+  listing.textContent = "";
+  shown.forEach((d, i) => {
+    const el = row(d);
+    el.style.animationDelay = Math.min(i * 26, 380) + "ms";
+    listing.append(el);
+  });
+  $("empty").hidden = shown.length > 0;
+  $("count").textContent = shown.length === DATA.length
+    ? `${DATA.length} titles` : `${shown.length} of ${DATA.length} titles`;
+  document.querySelectorAll(".tag[data-group]").forEach(t => {
+    const v = t.dataset.value;
+    const on = t.dataset.group === "kind" ? state.kind === v
+      : t.dataset.group === "genre" ? state.genres.has(v) : state.moods.has(v);
+    t.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  $("unwatched").setAttribute("aria-pressed", state.unwatched ? "true" : "false");
+  $("view").setAttribute("aria-pressed", state.plates ? "true" : "false");
+}
+
+function dd(term, value) { return value ? `<dt>${term}</dt><dd>${value}</dd>` : ""; }
+
+function openSheet(d) {
+  const art = d.poster ? `<img src="${esc(d.poster)}" alt="">`
+                       : `<div class="none">${esc(d.title)}</div>`;
+  const bg = d.poster ? `<div class="sheet-bg"><img src="${esc(d.poster)}" alt=""></div>` : "";
+  $("sheetBody").innerHTML = `${bg}<div class="sheet">
+    <div class="art">${art}</div>
+    <div class="body">
+      <h2>${esc(d.title)}${d.year ? ` <span class="year">${d.year}</span>` : ""}</h2>
+      <div class="facts">${factsHtml(d)}${d.watched ? " &nbsp;·&nbsp; seen" : ""}</div>
+      ${d.overview ? `<p class="overview">${esc(d.overview)}</p>` : ""}
+      <dl>
+        ${dd(d.kind === "series" ? "Creator" : "Director", esc(d.director || ""))}
+        ${dd("Cast", esc((d.cast || []).join(", ")))}
+        ${dd("Mood", esc((d.moods || []).join(" · ")))}
+        ${dd("File", `<code>${esc(d.tech || "")}</code>`)}
+        ${dd("Folder", `<code>${esc(d.key)}</code>`)}
+      </dl>
+      ${d.tmdb ? `<a class="tmdb" href="${esc(d.tmdb)}" target="_blank" rel="noopener">TMDB &rarr;</a>` : ""}
+    </div></div>`;
+  $("sheet").showModal();
+}
+
+$("q").addEventListener("input", e => { state.q = e.target.value.trim(); render(); });
+$("sort").addEventListener("change", e => { state.sort = e.target.value; render(); });
+$("unwatched").addEventListener("click", () => { state.unwatched = !state.unwatched; render(); });
+$("view").addEventListener("click", () => { state.plates = !state.plates; render(); });
+$("sheet").querySelector(".close").onclick = () => $("sheet").close();
+$("sheet").addEventListener("click", e => { if (e.target.id === "sheet") $("sheet").close(); });
+document.addEventListener("keydown", e => {
+  if (e.key === "/" && document.activeElement !== $("q")) { e.preventDefault(); $("q").focus(); }
+});
+
+buildTags();
+render();
+</script>
+</body>
+</html>

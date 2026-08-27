@@ -17,6 +17,7 @@ from .cache import Cache, new_record
 
 CONTENTS_NAME = "CONTENTS.md"
 CACHE_NAME = "cache.json"
+WEB_NAME = "index.html"
 
 # How patiently a newly seen folder is watched before it is published. A
 # torrent creates its folder long before the file is finished, so a folder is
@@ -105,15 +106,17 @@ def update(
 
     cache.save()
 
-    markdown = render_md.render(cache.ready(), now=now)
-    contents.write_text(markdown, encoding="utf-8")
+    ready = cache.ready()
+    contents.write_text(render_md.render(ready, now=now), encoding="utf-8")
+    web = write_web(cfg, ready, now=now)
 
     return {
         "added": added,
         "removed": removed,
         "pending": pending,
-        "total": len(cache.ready()),
+        "total": len(ready),
         "contents": contents,
+        "web": web,
     }
 
 
@@ -193,6 +196,18 @@ def rebuild(cfg: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
             if record:
                 record["watched"] = is_watched
         cache.save()
+        ready = cache.ready()
         contents.write_text(
-            render_md.render(cache.ready(), now=kwargs.get("now")), encoding="utf-8")
+            render_md.render(ready, now=kwargs.get("now")), encoding="utf-8")
+        write_web(cfg, ready, now=kwargs.get("now"))
     return result
+
+
+def write_web(cfg: Dict[str, Any], records, now: Optional[datetime] = None) -> Path:
+    """Render the browsable page next to the cache, posters and all."""
+    from . import render_web
+
+    target = config.state_dir(cfg) / WEB_NAME
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(render_web.render(records, now=now), encoding="utf-8")
+    return target
