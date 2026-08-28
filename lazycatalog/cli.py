@@ -98,9 +98,20 @@ def cmd_init(args: argparse.Namespace) -> int:
         "ollama_model": model,
     })
     path = config.save(cfg)
+    repo = Path(__file__).resolve().parent.parent
     _say()
     _say("Saved {} (mode 600).".format(path))
-    _say("Next: lazy-catalog update")
+    _say()
+    # Without these the commands only exist as paths inside the checkout, which
+    # is the easiest step in the whole setup to skip and the most confusing to
+    # debug — `movies` simply reports command not found.
+    _say("Add the commands to your shell, if you haven't already:")
+    _say()
+    for name in ("lazy-catalog", "lazy-pick", "movies"):
+        _say('    echo \'alias {}="{}/scripts/{}"\' >> ~/.zshrc'.format(
+            name, repo, name))
+    _say()
+    _say("Then `source ~/.zshrc` and run: lazy-catalog update")
     return 0
 
 

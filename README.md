@@ -22,9 +22,16 @@ unverified is marked `~`.
 ```bash
 git clone https://github.com/RafatH0ssain/lazy-catalog.git ~/Projects/lazy-catalog
 cd ~/Projects/lazy-catalog
-./scripts/lazy-catalog init      # asks for your library folder and TMDB key
-./scripts/lazy-catalog update    # builds the catalogue
-./scripts/lazy-catalog install   # watch the folder from now on
+
+# Put the commands on your PATH first, or none of them will be found.
+for c in lazy-catalog lazy-pick movies; do
+  echo "alias $c=\"$PWD/scripts/$c\"" >> ~/.zshrc
+done
+source ~/.zshrc
+
+lazy-catalog init      # asks for your library folder and TMDB key
+lazy-catalog update    # builds the catalogue
+lazy-catalog install   # watch the folder from now on
 ```
 
 The TMDB key is [free and instant](https://www.themoviedb.org/settings/api).
@@ -35,14 +42,6 @@ never the repo. v3 keys and v4 tokens both work.
 Optional: `brew install ffmpeg` for tech specs, [Ollama](https://ollama.com)
 for mood tags and `lazy-pick`, `uv tool install subliminal` for subtitles.
 Each one degrades gracefully if missing.
-
-Add the aliases you want:
-
-```bash
-echo 'alias movies="$HOME/Projects/lazy-catalog/scripts/movies"' >> ~/.zshrc
-echo 'alias lazy-pick="$HOME/Projects/lazy-catalog/scripts/lazy-pick"' >> ~/.zshrc
-echo 'alias lazy-catalog="$HOME/Projects/lazy-catalog/scripts/lazy-catalog"' >> ~/.zshrc
-```
 
 ## Using it
 
