@@ -50,9 +50,21 @@ def _apply_local_facts(record: Dict[str, Any], entry: scan.Entry) -> None:
     record["kind"] = entry.kind
     record["total_size"] = entry.total_size
     record["episode_count"] = entry.episode_count
+    record["specials"] = entry.specials
     record["seasons"] = {str(k): v for k, v in sorted(entry.seasons.items())}
     record["external_subs"] = entry.external_subs
     record["issues"] = list(entry.issues)
+
+    # Stored relative to the library so the cache stays portable, and so the
+    # play endpoint has a path it can validate rather than trust.
+    primary = entry.primary_video()
+    if primary is not None:
+        try:
+            record["video"] = str(primary.path.relative_to(entry.path.parent))
+        except ValueError:
+            record["video"] = None
+    else:
+        record["video"] = None
 
     # ffprobe is cheap but not free, so only re-read when the file it described
     # has actually changed — or when the stored reading predates a fix to how

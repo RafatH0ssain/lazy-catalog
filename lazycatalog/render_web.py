@@ -51,7 +51,10 @@ def _season_line(record: Dict[str, Any]) -> str:
         return ""
     span = ("Season {}".format(numbers[0]) if len(numbers) == 1
             else "Seasons {}\u2013{}".format(numbers[0], numbers[-1]))
-    return "{} · {} episodes".format(span, record.get("episode_count") or 0)
+    line = "{} · {} episodes".format(span, record.get("episode_count") or 0)
+    if record.get("specials"):
+        line += " · {} specials".format(record["specials"])
+    return line
 
 
 def _payload(record: Dict[str, Any]) -> Dict[str, Any]:
@@ -85,6 +88,7 @@ def _payload(record: Dict[str, Any]) -> Dict[str, Any]:
         "director": record.get("director") or "",
         "cast": record.get("cast") or [],
         "poster": record.get("poster"),
+        "video": record.get("video"),
         "tmdb": record.get("tmdb_url"),
         "tech": _tech_line(record),
         "seasonLine": _season_line(record),
@@ -107,7 +111,14 @@ def _embed(payload: Any) -> str:
 
 
 def render(records: Iterable[Dict[str, Any]], title: str = "The Home Cinema",
-           now: Optional[datetime] = None) -> str:
+           now: Optional[datetime] = None, token: str = "") -> str:
+    """Render the page.
+
+    `token` is supplied only when the page is served by the local helper, and
+    it is what enables playing a title in VLC. Opened straight off disk there
+    is no token and no helper, so the play affordance is simply absent rather
+    than present and broken.
+    """
     records = list(records)
     payload = [_payload(r) for r in records]
     now = now or datetime.now()
@@ -131,9 +142,12 @@ def render(records: Iterable[Dict[str, Any]], title: str = "The Home Cinema",
     footer = ("Catalogued by lazy-catalog on {}. "
               "Mark something watched by ticking its box in CONTENTS.md.").format(
         now.strftime("%d %B %Y, %H:%M"))
+    if token:
+        footer += " Click a poster in the detail view to play it in VLC."
 
     return (TEMPLATE.read_text(encoding="utf-8")
             .replace("__DATA__", _embed(payload))
             .replace("__TITLE__", title)
             .replace("__STATS__", "".join("<span>{}</span>".format(x) for x in ledger))
-            .replace("__FOOTER__", footer))
+            .replace("__FOOTER__", footer)
+            .replace("__TOKEN__", token))

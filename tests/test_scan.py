@@ -49,6 +49,40 @@ class ScanTest(unittest.TestCase):
         self.assertEqual(entry.seasons[2], 1)
         self.assertTrue(entry.has_extras)
 
+    def test_extras_do_not_count_as_episodes(self):
+        base = "Show (2010)"
+        make(self.root, base + "/Season 01/Show.S01E01.mkv")
+        make(self.root, base + "/Season 01/Show.S01E02.mkv")
+        make(self.root, base + "/Extras/Season 01/Animatic Extra 1.mkv")
+        make(self.root, base + "/Extras/Season 01/Animatic Extra 2.mkv")
+        entry = scan.scan_library(self.root)[0]
+        self.assertEqual(entry.seasons, {1: 2})
+        self.assertEqual(entry.episode_count, 2)
+        self.assertTrue(entry.has_extras)
+
+    def test_specials_are_counted_separately_from_episodes(self):
+        base = "Show (2010)"
+        for ep in (1, 2, 3):
+            make(self.root, base + "/Season 01/Show.S01E{:02d}.mkv".format(ep))
+        for ep in (1, 2):
+            make(self.root, base + "/Season 00/Show.S00E{:02d}.mkv".format(ep))
+        entry = scan.scan_library(self.root)[0]
+        self.assertEqual(entry.episode_count, 3)
+        self.assertEqual(entry.specials, 2)
+
+    def test_an_extra_is_never_the_file_you_play(self):
+        base = "Show (2010)"
+        make(self.root, base + "/Extras/Season 01/Animatic Extra 1.mkv", 9999)
+        make(self.root, base + "/Season 01/Show.S01E01.mkv", 100)
+        entry = scan.scan_library(self.root)[0]
+        self.assertEqual(entry.primary_video().path.name, "Show.S01E01.mkv")
+
+    def test_a_film_ignores_its_sample_file(self):
+        make(self.root, "Film (2020)/Sample/sample.mkv", 50)
+        make(self.root, "Film (2020)/Film.mkv", 900)
+        entry = scan.scan_library(self.root)[0]
+        self.assertEqual(entry.primary_video().path.name, "Film.mkv")
+
     def test_incomplete_download_is_flagged(self):
         make(self.root, "Some Movie (2020)/movie.mkv.part")
         entry = scan.scan_library(self.root)[0]

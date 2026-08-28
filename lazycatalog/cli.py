@@ -264,6 +264,46 @@ def cmd_web(args: argparse.Namespace) -> int:
     return 0
 
 
+DEFAULT_PORT = 8770
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    """Serve the library page locally so posters can hand a file to VLC."""
+    import errno
+    import subprocess as sp
+
+    from . import serve
+
+    cfg = config.load()
+    url = "http://127.0.0.1:{}/".format(args.port)
+
+    def show() -> None:
+        if not args.no_open:
+            sp.run(["open", "-a", args.browser, url])
+
+    try:
+        server, url, _token = serve.start(cfg, args.port)
+    except OSError as exc:
+        if exc.errno in (errno.EADDRINUSE, errno.EACCES):
+            # Something is already serving here: show that one rather than
+            # failing, which is what you want when you type `movies` twice.
+            _say("Already serving {}".format(url))
+            show()
+            return 0
+        raise
+
+    _say("Serving {}".format(url))
+    _say("Click a poster in the detail view to play it in VLC. Ctrl+C stops.")
+    show()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        _say("\nStopped.")
+    finally:
+        server.server_close()
+    return 0
+
+
 def cmd_install(args: argparse.Namespace) -> int:
     from . import install as installer
 
@@ -468,6 +508,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("web", help="rebuild the browsable page and print its path")
 
+    server = subparsers.add_parser(
+        "serve", help="serve the library page locally and open it")
+    server.add_argument("--port", type=int, default=DEFAULT_PORT,
+                        help="port to listen on (default: {})".format(DEFAULT_PORT))
+    server.add_argument("--browser", default="Safari", help="browser to open")
+    server.add_argument("--no-open", action="store_true",
+                        help="start the server without opening a browser")
+
     subparsers.add_parser("install", help="watch the library automatically (launchd)")
     subparsers.add_parser("uninstall", help="stop watching the library")
 
@@ -508,6 +556,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "status": cmd_status,
         "pick": cmd_pick,
         "web": cmd_web,
+        "serve": cmd_serve,
         "install": cmd_install,
         "uninstall": cmd_uninstall,
         "subs": cmd_subs,

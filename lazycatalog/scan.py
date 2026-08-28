@@ -24,6 +24,14 @@ INCOMPLETE_SUFFIXES = (".part", ".!qb", ".crdownload", ".aria2", ".download", ".
 
 STATE_DIR_NAME = ".lazy"
 
+# Folders whose contents are bonus material, not the show. A release can nest a
+# full "Season 01" tree inside Extras, so these are excluded by path rather than
+# by filename — otherwise an animatic outranks the actual first episode and
+# inflates the episode count.
+EXTRA_DIRS = {"extras", "featurettes", "behind the scenes", "deleted scenes",
+              "interviews", "trailers", "trailer", "sample", "samples", "other",
+              "bonus", "bloopers"}
+
 
 @dataclass
 class VideoFile:
@@ -31,6 +39,7 @@ class VideoFile:
     size: int
     season: Optional[int] = None
     episode: Optional[int] = None
+    extra: bool = False
 
 
 @dataclass
@@ -51,7 +60,34 @@ class Entry:
 
     @property
     def episode_count(self) -> int:
-        return sum(self.seasons.values())
+        """Episodes in numbered seasons. Specials are counted separately so a
+        show isn't described as "Season 1, 40 episodes" when 14 of those are
+        season-zero extras."""
+        return sum(count for season, count in self.seasons.items() if season >= 1)
+
+    @property
+    def specials(self) -> int:
+        return self.seasons.get(0, 0)
+
+    def primary_video(self) -> Optional[VideoFile]:
+        """The file to play when you pick this title.
+
+        For a film that is simply the biggest file. For a series it is the
+        earliest episode, since the largest would be an arbitrary mid-season
+        one and starting a show at episode 7 helps nobody.
+        """
+        if not self.videos:
+            return None
+        main = [v for v in self.videos if not v.extra] or self.videos
+        if self.kind == "series":
+            episodic = [v for v in main if v.season is not None]
+            if episodic:
+                # Season 0 is specials and pilots, so it sorts last: starting a
+                # show means episode one of season one, not a bonus reel.
+                return min(episodic, key=lambda v: (0 if v.season >= 1 else 1,
+                                                    v.season, v.episode or 0,
+                                                    v.path.name))
+        return max(main, key=lambda v: v.size)
 
 
 def _is_incomplete(name: str) -> bool:
@@ -111,7 +147,10 @@ def scan_folder(path: Path) -> Entry:
                         season = season_from_dir[parent]
                         break
 
-            entry.videos.append(VideoFile(file_path, size, season, episode))
+            is_extra = any(part.lower() in EXTRA_DIRS
+                           for part in file_path.relative_to(path).parts[:-1])
+            entry.videos.append(
+                VideoFile(file_path, size, season, episode, is_extra))
             entry.total_size += size
 
     # A folder is a series if the disk says so, or failing that if the name did.
@@ -123,7 +162,7 @@ def scan_folder(path: Path) -> Entry:
 
     if entry.kind == "series":
         for video in entry.videos:
-            if video.season is None:
+            if video.season is None or video.extra:
                 continue
             entry.seasons[video.season] = entry.seasons.get(video.season, 0) + 1
 

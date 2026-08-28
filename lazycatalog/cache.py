@@ -42,9 +42,11 @@ def new_record(key: str, title: str, year: Optional[int], kind: str) -> Dict[str
         # local truth
         "seasons": {},
         "episode_count": 0,
+        "specials": 0,
         "total_size": 0,
         "tech": {},
         "external_subs": False,
+        "video": None,               # primary file, relative to the library
         # model-generated, never factual
         "moods": [],
         "issues": [],

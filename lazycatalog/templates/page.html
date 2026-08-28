@@ -195,6 +195,46 @@ dialog[open] { animation: lift .32s var(--ease); }
 .sheet a.tmdb { font: 400 11px/1 var(--util); letter-spacing: .14em;
   text-transform: uppercase; color: var(--lamp); text-decoration: none;
   border-bottom: 1px solid currentColor; padding-bottom: 3px; }
+/* The poster in the detail view doubles as the play control when the local
+   helper is running. It is a button only then, so it never looks clickable
+   while it cannot do anything. */
+.art button.play { display: block; width: 100%; padding: 0; border: 0;
+  background: none; cursor: pointer; position: relative; font: inherit;
+  color: inherit; }
+.art button.play img { transition: filter .25s var(--ease); }
+.art button.play::after {
+  content: ""; position: absolute; inset: 0; opacity: 0;
+  background: rgba(10,7,7,.55);
+  transition: opacity .25s var(--ease);
+}
+.art button.play .cue {
+  position: absolute; inset: 0; display: flex; align-items: center;
+  justify-content: center; flex-direction: column; gap: 9px; z-index: 2;
+  opacity: 0; transition: opacity .25s var(--ease);
+  font: 400 10px/1 var(--util); letter-spacing: .18em; text-transform: uppercase;
+  color: var(--paper); pointer-events: none;
+}
+.art button.play .cue svg { width: 34px; height: 34px; fill: var(--paper); }
+.art button.play:hover::after, .art button.play:focus-visible::after,
+.art button.play:hover .cue, .art button.play:focus-visible .cue { opacity: 1; }
+.art button.play:focus-visible { outline: 2px solid var(--lamp); outline-offset: 3px; }
+.art button.play[aria-busy="true"] .cue { opacity: 1; }
+.art button.play[aria-busy="true"]::after { opacity: 1; }
+.playnote { margin: 10px 0 0; font: 400 10.5px/1.5 var(--util); letter-spacing: .1em;
+  text-transform: uppercase; color: var(--dim); text-align: center; }
+.playnote.bad { color: var(--velvet); }
+
+.toast {
+  position: fixed; left: 50%; bottom: 30px; transform: translate(-50%, 16px);
+  z-index: 60; background: var(--house-2); border: 1px solid var(--rule-2);
+  color: var(--paper); padding: 12px 18px; font: 400 11.5px/1 var(--util);
+  letter-spacing: .08em; opacity: 0; pointer-events: none;
+  transition: opacity .25s var(--ease), transform .25s var(--ease);
+  max-width: min(560px, calc(100vw - 40px)); text-align: center;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast.bad { border-color: var(--velvet); }
+
 .close { position: absolute; top: 16px; right: 18px; z-index: 3; width: 28px;
   height: 28px; background: none; border: 1px solid var(--rule-2); color: var(--paper);
   font-size: 15px; cursor: pointer; line-height: 1; }
@@ -252,9 +292,13 @@ dialog[open] { animation: lift .32s var(--ease); }
 
 <dialog id="sheet"><button class="close" aria-label="Close">&times;</button>
 <div id="sheetBody"></div></dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 const DATA = __DATA__;
+// Present only when the page is served by the local helper. Without it there
+// is nothing that can launch VLC, so the play control is not offered at all.
+const TOKEN = "__TOKEN__";
 const $ = (id) => document.getElementById(id);
 const state = { q: "", sort: "title", unwatched: false, plates: false,
                 kind: null, genres: new Set(), moods: new Set() };
@@ -392,9 +436,49 @@ function render() {
 
 function dd(term, value) { return value ? `<dt>${term}</dt><dd>${value}</dd>` : ""; }
 
+let toastTimer;
+function toast(message, bad) {
+  const el = $("toast");
+  el.textContent = message;
+  el.className = "toast show" + (bad ? " bad" : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = "toast"; }, 4200);
+}
+
+const PLAY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6L19 12z"/></svg>';
+
+function canPlay(d) { return Boolean(TOKEN && d.video); }
+
+async function play(d, button) {
+  if (button.getAttribute("aria-busy") === "true") return;
+  button.setAttribute("aria-busy", "true");
+  const cue = button.querySelector(".cue span");
+  const original = cue ? cue.textContent : "";
+  if (cue) cue.textContent = "Opening";
+  try {
+    const response = await fetch("/play", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Lazy-Token": TOKEN },
+      body: JSON.stringify({ key: d.key }),
+    });
+    const result = await response.json();
+    toast(result.ok ? result.message : result.error, !result.ok);
+  } catch (err) {
+    toast("Couldn't reach the lazy-catalog helper. Is `movies` still running?", true);
+  } finally {
+    button.setAttribute("aria-busy", "false");
+    if (cue) cue.textContent = original;
+  }
+}
+
 function openSheet(d) {
-  const art = d.poster ? `<img src="${esc(d.poster)}" alt="">`
-                       : `<div class="none">${esc(d.title)}</div>`;
+  const image = d.poster ? `<img src="${esc(d.poster)}" alt="">`
+                         : `<div class="none">${esc(d.title)}</div>`;
+  const label = d.kind === "series" ? "Play first episode" : "Play in VLC";
+  const art = canPlay(d)
+    ? `<button class="play" type="button" title="${esc(label)}">${image}
+         <span class="cue">${PLAY_ICON}<span>${esc(label)}</span></span></button>`
+    : image;
   const bg = d.poster ? `<div class="sheet-bg"><img src="${esc(d.poster)}" alt=""></div>` : "";
   $("sheetBody").innerHTML = `${bg}<div class="sheet">
     <div class="art">${art}</div>
@@ -411,6 +495,9 @@ function openSheet(d) {
       </dl>
       ${d.tmdb ? `<a class="tmdb" href="${esc(d.tmdb)}" target="_blank" rel="noopener">TMDB &rarr;</a>` : ""}
     </div></div>`;
+
+  const button = $("sheetBody").querySelector("button.play");
+  if (button) button.onclick = () => play(d, button);
   $("sheet").showModal();
 }
 

@@ -1,32 +1,25 @@
 #!/usr/bin/env zsh
 # movies — open the library in the browser.
 #
-#   movies             open the page as it was last built
+#   movies             open the library
 #   movies --refresh   catalogue anything new first, then open
+#   movies --port 9000 anything else is passed straight through
 #
-# The page is a single self-contained file, so there is no server to start and
-# nothing left running afterwards.
+# Ctrl+C stops it. The page is served from localhost rather than opened off
+# disk because clicking a poster hands the file to VLC, and a page loaded from
+# file:// has no way to launch an app. If a library is already being served,
+# this opens the tab and leaves the running one alone.
 
 set -e
 
 REPO="${0:A:h:h}"
 PYTHON="${LAZY_CATALOG_PYTHON:-python3}"
-BROWSER_APP="Safari"
 
 cd "$REPO"
 
 if [[ "$1" == "--refresh" || "$1" == "-r" ]]; then
   shift
-  "$PYTHON" -m lazycatalog update "$@"
+  "$PYTHON" -m lazycatalog update
 fi
 
-# `web` rebuilds the page from the cache and prints where it landed, so the
-# page is never stale relative to the catalogue even without --refresh.
-page="$("$PYTHON" -m lazycatalog web)"
-
-if [[ ! -f "$page" ]]; then
-  print -u2 "No library page yet. Run: lazy-catalog update"
-  exit 1
-fi
-
-open -a "$BROWSER_APP" "file://$page"
+exec "$PYTHON" -m lazycatalog serve "$@"

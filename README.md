@@ -46,7 +46,7 @@ Each one degrades gracefully if missing.
 ## Using it
 
 ```bash
-movies                    # open the library page
+movies                    # open the library page; Ctrl+C stops it
 lazy-pick something short and funny
 lazy-catalog subs --films # subtitles for anything missing them
 lazy-catalog nfo          # .nfo sidecars for Jellyfin, Kodi and Plex
@@ -69,6 +69,8 @@ Ruled out: The Thing
 The model picks by number from a list it's handed, and every number is checked
 against that list, so it can't recommend a film you don't own.
 
+Click any title to expand it, then click its poster to play it in VLC.
+
 Mark things watched by ticking the box in `CONTENTS.md`. That's the only place
 it's set; it's read back on every run and survives regeneration, even if the
 folder gets renamed.
@@ -76,6 +78,13 @@ folder gets renamed.
 `lazy-catalog --help` lists the rest.
 
 ## Notes
+
+`movies` serves the page from `127.0.0.1` and runs until you Ctrl+C, rather
+than opening a file. That's only so a poster click can hand the file to VLC:
+VLC registers no URL scheme on macOS, so a page loaded from `file://` has no
+way to launch it. The play endpoint takes a catalogue key, never a path, looks
+the file up itself, refuses anything that doesn't resolve inside your library,
+and requires a token that only the page it served knows.
 
 New folders aren't published until their size stops changing, so a
 half-finished download never lands in the catalogue.
@@ -88,7 +97,7 @@ Subtitles only download when you ask, capped at 25 files per run, because free
 providers are rate limited and one long series would spend the day's quota.
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 139 tests, no network
+python3 -m unittest discover -s tests -t .   # 161 tests
 ```
 
 MIT.

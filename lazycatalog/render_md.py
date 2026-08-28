@@ -125,6 +125,8 @@ def _facts_line(record: Dict[str, Any]) -> str:
             bits.append(span)
         if record.get("episode_count"):
             bits.append("{} episodes".format(record["episode_count"]))
+        if record.get("specials"):
+            bits.append("{} specials".format(record["specials"]))
     elif record.get("runtime"):
         bits.append(mark + human_duration(record["runtime"]))
 

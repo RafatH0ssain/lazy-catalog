@@ -121,3 +121,19 @@ class SubtitleListTest(unittest.TestCase):
         out = render_md.format_subs(codes)
         self.assertLess(len(out), 24)
         self.assertTrue(out.endswith("+32"))
+
+
+class SpecialsTest(unittest.TestCase):
+    def test_specials_are_counted_apart_from_episodes(self):
+        rec = cache.new_record("Adventure Time", "Adventure Time", 2010, "series")
+        rec.update(status="ready", seasons={"0": 14, "1": 26}, episode_count=26,
+                   specials=14, enriched=True)
+        out = render_md.render([rec])
+        self.assertIn("Season 1 · 26 episodes · 14 specials", out)
+
+    def test_a_show_with_no_specials_says_nothing_about_them(self):
+        rec = cache.new_record("Show", "Show", 2020, "series")
+        rec.update(status="ready", seasons={"1": 8}, episode_count=8, specials=0)
+        out = render_md.render([rec])
+        self.assertIn("8 episodes", out)
+        self.assertNotIn("specials", out)
