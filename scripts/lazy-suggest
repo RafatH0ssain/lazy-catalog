@@ -1,0 +1,18 @@
+#!/usr/bin/env zsh
+# lazy-suggest — recommend films you don't own, based on the ones you do.
+#
+#   lazy-suggest
+#   lazy-suggest something slow and bleak
+#   lazy-suggest -n 8 comedies that aren't stupid
+#   lazy-suggest --model gemma3:12b
+#
+# Every suggestion is checked against TMDB before you see it, so anything the
+# model invented is dropped. Survivors are appended to WATCHLIST.md.
+
+set -e
+
+REPO="${0:A:h:h}"
+PYTHON="${LAZY_CATALOG_PYTHON:-python3}"
+
+cd "$REPO"
+exec "$PYTHON" -m lazycatalog suggest "$@"

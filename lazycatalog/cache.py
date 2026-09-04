@@ -58,6 +58,7 @@ class Cache:
         self.path = path
         self.data = data or {"version": CACHE_VERSION, "entries": {}}
         self.data.setdefault("entries", {})
+        self.data.setdefault("watchlist", {})
 
     @classmethod
     def load(cls, path: Path) -> "Cache":
@@ -109,6 +110,29 @@ class Cache:
 
     def __len__(self) -> int:
         return len(self.entries)
+
+    # -- watchlist -----------------------------------------------------
+    #
+    # Films that were suggested but aren't owned. Kept in the same file as the
+    # library so WATCHLIST.md can be regenerated from it the same way
+    # CONTENTS.md is, and so a suggestion is never made twice.
+
+    @property
+    def watchlist(self) -> Dict[str, Dict[str, Any]]:
+        return self.data["watchlist"]
+
+    def watchlist_entries(self) -> List[Dict[str, Any]]:
+        return sorted(self.watchlist.values(),
+                      key=lambda r: (r.get("title") or "").lower())
+
+    def add_suggestion(self, entry: Dict[str, Any]) -> None:
+        self.watchlist[str(entry["tmdb_id"])] = entry
+
+    def suggested_ids(self) -> set:
+        return {str(k) for k in self.watchlist}
+
+    def owned_ids(self) -> set:
+        return {str(r["tmdb_id"]) for r in self.entries.values() if r.get("tmdb_id")}
 
     def ready(self) -> List[Dict[str, Any]]:
         """Records settled enough to publish."""

@@ -20,6 +20,10 @@ DEFAULTS: Dict[str, Any] = {
     "tmdb_api_key": "",
     "ollama_host": "http://localhost:11434",
     "ollama_model": "huihui_ai/mistral-small-abliterated:24b",
+    # Recalling films you don't own rewards breadth over reasoning, so the best
+    # model for `suggest` is often not the best one for `pick`. Empty means use
+    # ollama_model.
+    "suggest_model": "",
     "language": "en-US",
     "subtitle_languages": ["en"],
 }

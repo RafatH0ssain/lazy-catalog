@@ -244,6 +244,67 @@ def render(records: Iterable[Dict[str, Any]], now: Optional[datetime] = None) ->
     return "\n".join(lines)
 
 
+WATCHLIST_NOTE = (
+    "*Suggested by lazy-catalog and checked against TMDB. Tick something off "
+    "once you've seen it — ticked entries are kept but never suggested again.*")
+
+
+def render_watchlist(entries: Iterable[Dict[str, Any]],
+                     now: Optional[datetime] = None) -> str:
+    """WATCHLIST.md — films you don't own yet.
+
+    Same anchor convention as CONTENTS.md, keyed on TMDB id rather than folder
+    name, so ticking one off survives regeneration.
+    """
+    entries = sorted(entries, key=lambda r: (r.get("title") or "").lower())
+    now = now or datetime.now()
+
+    seen = sum(1 for e in entries if e.get("watched"))
+    lines: List[str] = ["# Watchlist", ""]
+    if entries:
+        summary = "{} suggestion{}".format(len(entries), "" if len(entries) == 1 else "s")
+        if seen:
+            summary += " · {} seen".format(seen)
+        lines += [summary, ""]
+    else:
+        lines += ["Nothing suggested yet. Run `lazy-suggest`.", ""]
+    lines += [WATCHLIST_NOTE, ""]
+
+    for entry in entries:
+        mark = "x" if entry.get("watched") else " "
+        heading = "**{}**".format(entry.get("title") or "?")
+        if entry.get("year"):
+            heading += " ({})".format(entry["year"])
+
+        facts = []
+        if entry.get("genres"):
+            facts.append(", ".join(entry["genres"][:3]))
+        if entry.get("runtime"):
+            facts.append(human_duration(entry["runtime"]))
+        if entry.get("rating"):
+            facts.append("★ {:.1f}".format(float(entry["rating"])))
+        if facts:
+            heading += " · " + " · ".join(facts)
+
+        lines.append("- [{}] {} <!--k:tmdb:{}-->".format(
+            mark, heading, entry.get("tmdb_id")))
+        if entry.get("why"):
+            lines.append("      {}".format(entry["why"]))
+        if entry.get("overview"):
+            lines.append("      {}".format(entry["overview"]))
+        tail = []
+        if entry.get("director"):
+            tail.append(entry["director"])
+        if entry.get("tmdb_url"):
+            tail.append("[TMDB]({})".format(entry["tmdb_url"]))
+        if tail:
+            lines.append("      {}".format(" · ".join(tail)))
+        lines.append("")
+
+    lines += ["---", "", "*Last updated {}*".format(now.strftime("%Y-%m-%d %H:%M")), ""]
+    return "\n".join(lines)
+
+
 def read_watched(markdown: str) -> Dict[str, bool]:
     """Watched state keyed by folder name, from a previously rendered file."""
     state: Dict[str, bool] = {}

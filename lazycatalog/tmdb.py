@@ -111,10 +111,24 @@ class Client:
         return normalise(self.details(match["id"], kind), kind)
 
 
+# Films are catalogued both ways round — a folder says "12 Monkeys" where TMDB
+# says "Twelve Monkeys" — so numbers are spelled one way before comparing.
+NUMBER_WORDS = {
+    "one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6",
+    "seven": "7", "eight": "8", "nine": "9", "ten": "10", "eleven": "11",
+    "twelve": "12", "thirteen": "13", "fourteen": "14", "fifteen": "15",
+    "sixteen": "16", "seventeen": "17", "eighteen": "18", "nineteen": "19",
+    "twenty": "20", "thirty": "30", "forty": "40", "fifty": "50",
+    "hundred": "100", "thousand": "1000",
+}
+
+
 def _normalise_title(text: str) -> str:
     text = text.lower().replace("&", "and")
     text = re.sub(r"[^a-z0-9 ]+", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
+    words = [NUMBER_WORDS.get(word, word) for word in text.split()]
+    # Leading articles move around between catalogues: "The Thing" / "Thing, The".
+    return " ".join(words).strip()
 
 
 def _result_year(result: Dict[str, Any], kind: str) -> Optional[int]:
@@ -126,27 +140,40 @@ def _result_year(result: Dict[str, Any], kind: str) -> Optional[int]:
 def _best_match(
     results: List[Dict[str, Any]], title: str, year: Optional[int], kind: str
 ) -> Optional[Dict[str, Any]]:
-    """Prefer an exact title match in the right year over a popular near-miss."""
+    """Pick the intended film, or nothing.
+
+    Ordering is: does the title actually match, is the year plausible, and then
+    how well known the film is. Vote count carries the tiebreak because two
+    films can share a title and a year while one has four thousand votes and
+    the other twenty — and because TMDB's release year routinely sits a year
+    off a folder's, an exact year is not worth more than that gap.
+
+    A result whose title bears no relation to what was asked for is rejected
+    outright: no facts at all beats another film's facts.
+    """
     if not results:
         return None
     wanted = _normalise_title(title)
 
-    def score(result: Dict[str, Any]) -> Tuple[int, int, float]:
+    def score(result: Dict[str, Any]) -> Tuple[int, int, int, float]:
         name = result.get("title") or result.get("name") or ""
         original = result.get("original_title") or result.get("original_name") or ""
-        candidates = {_normalise_title(name), _normalise_title(original)}
-        title_score = 2 if wanted in candidates else (
-            1 if any(wanted in c or c in wanted for c in candidates if c) else 0)
+        candidates = {c for c in (_normalise_title(name), _normalise_title(original)) if c}
+        if wanted in candidates:
+            title_score = 2
+        elif any(wanted in c or c in wanted for c in candidates):
+            title_score = 1
+        else:
+            title_score = 0
 
         found_year = _result_year(result, kind)
-        if year and found_year:
-            # Releases straddle new year, so allow a year either side.
-            year_score = 2 if found_year == year else (1 if abs(found_year - year) <= 1 else 0)
-        else:
-            year_score = 0
-        return (title_score, year_score, float(result.get("popularity") or 0.0))
+        # A year either side counts the same as an exact hit.
+        year_score = 1 if (year and found_year and abs(found_year - year) <= 1) else 0
+        return (title_score, year_score, int(result.get("vote_count") or 0),
+                float(result.get("popularity") or 0.0))
 
-    return max(results, key=score)
+    best = max(results, key=score)
+    return best if score(best)[0] > 0 else None
 
 
 def normalise(details: Dict[str, Any], kind: str) -> Dict[str, Any]:
@@ -172,6 +199,9 @@ def normalise(details: Dict[str, Any], kind: str) -> Dict[str, Any]:
 
     return {
         "tmdb_id": details.get("id"),
+        # The canonical name, so a suggestion is filed under TMDB's spelling
+        # rather than whatever the model typed.
+        "title": details.get("title") or details.get("name") or "",
         "tmdb_url": "{}/{}/{}".format(
             SITE_ROOT, "tv" if kind == "series" else "movie", details.get("id")),
         "overview": (details.get("overview") or "").strip(),

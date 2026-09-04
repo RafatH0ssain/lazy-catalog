@@ -24,7 +24,7 @@ git clone https://github.com/RafatH0ssain/lazy-catalog.git ~/Projects/lazy-catal
 cd ~/Projects/lazy-catalog
 
 # Put the commands on your PATH first, or none of them will be found.
-for c in lazy-catalog lazy-pick movies; do
+for c in lazy-catalog lazy-pick lazy-suggest movies; do
   echo "alias $c=\"$PWD/scripts/$c\"" >> ~/.zshrc
 done
 source ~/.zshrc
@@ -48,6 +48,7 @@ Each one degrades gracefully if missing.
 ```bash
 movies                    # open the library page; Ctrl+C stops it
 lazy-pick something short and funny
+lazy-suggest slow and bleak   # films you *don't* own, that you might like
 lazy-catalog subs --films # subtitles for anything missing them
 lazy-catalog nfo          # .nfo sidecars for Jellyfin, Kodi and Plex
 ```
@@ -68,6 +69,17 @@ Ruled out: The Thing
 
 The model picks by number from a list it's handed, and every number is checked
 against that list, so it can't recommend a film you don't own.
+
+`lazy-suggest` is the opposite: it reads your library as a taste profile and
+recommends films you *don't* have, weighting the ones you've marked watched.
+Every suggestion is looked up on TMDB before you see it — anything the model
+invented is dropped, and the year, runtime, genres and rating shown are TMDB's,
+not the model's. Survivors are appended to `WATCHLIST.md` with checkboxes, and
+nothing is ever suggested twice.
+
+Different models are good at different halves of this. Recalling unowned films
+rewards breadth, so `suggest_model` in the config can differ from
+`ollama_model`, and `--model` overrides both for one run.
 
 Click any title to expand it, then click its poster to play it in VLC.
 
@@ -97,7 +109,7 @@ Subtitles only download when you ask, capped at 25 files per run, because free
 providers are rate limited and one long series would spend the day's quota.
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 161 tests
+python3 -m unittest discover -s tests -t .   # 192 tests
 ```
 
 MIT.

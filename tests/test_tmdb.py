@@ -109,6 +109,48 @@ class MatchTest(unittest.TestCase):
                     "popularity": 5.0}]
         self.assertEqual(tmdb._best_match(results, "Closer", 2005, "film")["id"], 3)
 
+    def test_a_well_known_film_beats_an_obscure_one_a_year_apart(self):
+        """TMDB dates Under the Skin to 2014; a 20-vote short holds 2013.
+
+        Release years shift between festival and wide release, so an exact
+        year is not worth more than the difference between 3925 votes and 20.
+        """
+        results = [
+            {"id": 1, "title": "Under the Skin", "release_date": "2014-03-14",
+             "popularity": 9.45, "vote_count": 3925},
+            {"id": 2, "title": "Under the Skin", "release_date": "2013-01-01",
+             "popularity": 0.92, "vote_count": 20},
+        ]
+        self.assertEqual(
+            tmdb._best_match(results, "Under the Skin", 2013, "film")["id"], 1)
+
+    def test_a_wrong_year_still_loses_to_the_right_one(self):
+        results = [
+            {"id": 1, "title": "The Thing", "release_date": "2011-10-14",
+             "popularity": 90.0, "vote_count": 5000},
+            {"id": 2, "title": "The Thing", "release_date": "1982-06-25",
+             "popularity": 30.0, "vote_count": 4000},
+        ]
+        self.assertEqual(tmdb._best_match(results, "The Thing", 1982, "film")["id"], 2)
+
+    def test_spelled_out_numbers_match_digits(self):
+        """A folder says "12 Monkeys"; TMDB says "Twelve Monkeys"."""
+        results = [{"id": 63, "title": "Twelve Monkeys",
+                    "release_date": "1995-12-29", "popularity": 20.0,
+                    "vote_count": 8000}]
+        self.assertEqual(tmdb._best_match(results, "12 Monkeys", 1995, "film")["id"], 63)
+
+    def test_digits_match_spelled_out_numbers(self):
+        results = [{"id": 1, "title": "8 1/2", "release_date": "1963-02-13",
+                    "popularity": 10.0, "vote_count": 1500}]
+        self.assertEqual(tmdb._best_match(results, "Eight 1/2", 1963, "film")["id"], 1)
+
+    def test_an_unrelated_title_is_no_match_at_all(self):
+        """Better to report nothing than to attach the wrong film's facts."""
+        results = [{"id": 9, "title": "Possession", "release_date": "1981-05-25",
+                    "popularity": 12.0, "vote_count": 900}]
+        self.assertIsNone(tmdb._best_match(results, "Possessor", 2020, "film"))
+
     def test_no_results_gives_none(self):
         self.assertIsNone(tmdb._best_match([], "Nothing", 2000, "film"))
 
@@ -137,9 +179,11 @@ class NormaliseTest(unittest.TestCase):
         self.assertEqual(out["cast"][0], "Kurt Russell")
         self.assertTrue(out["poster_url"].endswith("/abc.jpg"))
         self.assertEqual(out["tmdb_url"], "https://www.themoviedb.org/movie/1091")
+        self.assertEqual(out["title"], "The Thing")
 
     def test_series_uses_creator_and_episode_runtime(self):
         out = tmdb.normalise(TV_DETAILS, "series")
+        self.assertEqual(out["title"], "Adventure Time")
         self.assertEqual(out["director"], "Pendleton Ward")
         self.assertEqual(out["runtime"], 11)
         self.assertEqual(out["year"], 2010)

@@ -254,6 +254,100 @@ def cmd_pick(args: argparse.Namespace) -> int:
     return 0
 
 
+WATCHLIST_NAME = "WATCHLIST.md"
+
+
+def cmd_suggest(args: argparse.Namespace) -> int:
+    """Recommend films you don't own, verified against TMDB."""
+    from . import render_md, suggest
+    from .cache import Cache
+
+    cfg = config.load()
+    state = config.state_dir(cfg)
+    cache = Cache.load(state / catalog.CACHE_NAME)
+    watchlist_path = config.library_path(cfg) / WATCHLIST_NAME
+
+    # Ticks are a human input: read them before the file is rewritten.
+    if watchlist_path.is_file():
+        ticks = render_md.read_watched(watchlist_path.read_text(encoding="utf-8"))
+        for anchor, is_watched in ticks.items():
+            entry = cache.watchlist.get(anchor.replace("tmdb:", ""))
+            if entry:
+                entry["watched"] = is_watched
+
+    if args.replace:
+        for key in [k for k, v in cache.watchlist.items() if not v.get("watched")]:
+            cache.watchlist.pop(key)
+
+    records = cache.ready()
+    try:
+        client = tmdb.Client(cfg["tmdb_api_key"], cfg.get("language", "en-US"))
+    except tmdb.AuthError as exc:
+        _say(str(exc))
+        return 1
+
+    model = args.model or cfg.get("suggest_model") or cfg["ollama_model"]
+    request = " ".join(args.request).strip()
+    _say("Reading {} titles and asking {}...".format(len(records), model))
+
+    accepted, dropped, error = suggest.propose(
+        records, request, client, cfg["ollama_host"], model, count=args.count,
+        owned_ids=cache.owned_ids(), known_ids=cache.suggested_ids(),
+        avoid=[e.get("title") or "" for e in cache.watchlist_entries()])
+    if error:
+        _say(error)
+        return 1
+
+    _say()
+    if not accepted:
+        _say("Nothing survived checking against TMDB.")
+    for entry in accepted:
+        facts = []
+        if entry.get("genres"):
+            facts.append(", ".join(entry["genres"][:3]))
+        if entry.get("runtime"):
+            facts.append(render_md.human_duration(entry["runtime"]))
+        if entry.get("rating"):
+            facts.append("★ {:.1f}".format(float(entry["rating"])))
+        heading = entry["title"]
+        if entry.get("year"):
+            heading += " ({})".format(entry["year"])
+        _say("  {}{}".format(heading, "  " + " · ".join(facts) if facts else ""))
+        if entry.get("why"):
+            _say("    {}".format(entry["why"]))
+        if entry.get("director"):
+            _say("    dir. {}".format(entry["director"]))
+        _say()
+
+    if dropped and args.verbose:
+        _say("Not shown:")
+        for title, reason in dropped:
+            _say("  {} — {}".format(title, reason))
+        _say()
+    elif dropped:
+        invented = sum(1 for _, r in dropped if "no such film" in r)
+        owned = sum(1 for _, r in dropped if "library" in r or "watchlist" in r)
+        notes = []
+        if invented:
+            notes.append("{} didn't exist on TMDB".format(invented))
+        if owned:
+            notes.append("{} you already have".format(owned))
+        if notes:
+            _say("({}; --verbose to list them)".format(", ".join(notes)))
+            _say()
+
+    if args.no_save or not accepted:
+        return 0
+
+    for entry in accepted:
+        cache.add_suggestion(entry)
+    cache.save()
+    watchlist_path.write_text(
+        render_md.render_watchlist(cache.watchlist_entries()), encoding="utf-8")
+    _say("Added to {}".format(watchlist_path))
+    return 0
+
+
 def cmd_web(args: argparse.Namespace) -> int:
     from .cache import Cache
 
@@ -506,6 +600,20 @@ def build_parser() -> argparse.ArgumentParser:
                         help="series only")
     picker.set_defaults(kind=None)
 
+    suggester = subparsers.add_parser(
+        "suggest", help="recommend films you don't own yet")
+    suggester.add_argument("request", nargs="*",
+                           help="a genre, a mood, or nothing at all")
+    suggester.add_argument("-n", "--count", type=int, default=5,
+                           help="how many to suggest (default: 5)")
+    suggester.add_argument("--model", help="override the configured Ollama model")
+    suggester.add_argument("--no-save", action="store_true",
+                           help="print without touching WATCHLIST.md")
+    suggester.add_argument("--replace", action="store_true",
+                           help="clear unticked watchlist entries first")
+    suggester.add_argument("--verbose", action="store_true",
+                           help="list what was dropped and why")
+
     subparsers.add_parser("web", help="rebuild the browsable page and print its path")
 
     server = subparsers.add_parser(
@@ -557,6 +665,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "pick": cmd_pick,
         "web": cmd_web,
         "serve": cmd_serve,
+        "suggest": cmd_suggest,
         "install": cmd_install,
         "uninstall": cmd_uninstall,
         "subs": cmd_subs,
