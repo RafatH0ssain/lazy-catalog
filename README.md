@@ -78,8 +78,10 @@ not the model's. Survivors are appended to `WATCHLIST.md` with checkboxes, and
 nothing is ever suggested twice.
 
 Different models are good at different halves of this. Recalling unowned films
-rewards breadth, so `suggest_model` in the config can differ from
-`ollama_model`, and `--model` overrides both for one run.
+rewards breadth rather than reasoning, so `suggest` defaults to `gemma3:12b`
+while everything else uses `ollama_model` — set `suggest_model` in the config
+to change it, or `--model` for one run. If the model isn't pulled it steps down
+to your configured one and tells you.
 
 Click any title to expand it, then click its poster to play it in VLC.
 
@@ -109,7 +111,7 @@ Subtitles only download when you ask, capped at 25 files per run, because free
 providers are rate limited and one long series would spend the day's quota.
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 192 tests
+python3 -m unittest discover -s tests -t .   # 197 tests
 ```
 
 MIT.

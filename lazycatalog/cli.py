@@ -257,6 +257,30 @@ def cmd_pick(args: argparse.Namespace) -> int:
 WATCHLIST_NAME = "WATCHLIST.md"
 
 
+def _suggest_model(cfg: Dict[str, Any], report) -> str:
+    """The model to ask for suggestions, falling back if it isn't pulled.
+
+    The default names a specific model, which is right for quality and wrong
+    for anyone cloning this who hasn't pulled it — so an absent model steps
+    down to the configured one rather than failing.
+    """
+    preferred = cfg.get("suggest_model") or cfg["ollama_model"]
+    fallback = cfg["ollama_model"]
+    if preferred == fallback:
+        return preferred
+
+    installed = llm.list_models(cfg["ollama_host"])
+    if not installed:
+        return preferred          # Ollama is down; let the call report that.
+    if preferred in installed:
+        return preferred
+    if fallback in installed:
+        report("{} isn't pulled, using {}. (ollama pull {})".format(
+            preferred, fallback, preferred))
+        return fallback
+    return preferred
+
+
 def cmd_suggest(args: argparse.Namespace) -> int:
     """Recommend films you don't own, verified against TMDB."""
     from . import render_md, suggest
@@ -286,7 +310,7 @@ def cmd_suggest(args: argparse.Namespace) -> int:
         _say(str(exc))
         return 1
 
-    model = args.model or cfg.get("suggest_model") or cfg["ollama_model"]
+    model = args.model or _suggest_model(cfg, _say)
     request = " ".join(args.request).strip()
     _say("Reading {} titles and asking {}...".format(len(records), model))
 

@@ -21,9 +21,10 @@ DEFAULTS: Dict[str, Any] = {
     "ollama_host": "http://localhost:11434",
     "ollama_model": "huihui_ai/mistral-small-abliterated:24b",
     # Recalling films you don't own rewards breadth over reasoning, so the best
-    # model for `suggest` is often not the best one for `pick`. Empty means use
-    # ollama_model.
-    "suggest_model": "",
+    # model for `suggest` is often not the best one for `pick`: gemma3 returns
+    # less obvious picks here, and twice as fast. Falls back to ollama_model if
+    # it isn't installed. Empty means use ollama_model.
+    "suggest_model": "gemma3:12b",
     "language": "en-US",
     "subtitle_languages": ["en"],
 }

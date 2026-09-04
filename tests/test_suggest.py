@@ -240,3 +240,51 @@ class CacheWatchlistTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SuggestModelTest(unittest.TestCase):
+    """The default names a specific model; anyone cloning may not have it."""
+
+    def setUp(self):
+        from lazycatalog import cli
+        self.pick = cli._suggest_model
+        self.said = []
+
+    def cfg(self, **kw):
+        base = {"ollama_host": "http://x", "ollama_model": "mistral:24b",
+                "suggest_model": "gemma3:12b"}
+        base.update(kw)
+        return base
+
+    def patched(self, installed):
+        from lazycatalog import cli, llm
+        original = llm.list_models
+        llm.list_models = lambda host, opener=None: installed
+        cli.llm = llm
+        try:
+            return self.pick(self.cfg(), self.said.append)
+        finally:
+            llm.list_models = original
+
+    def test_the_preferred_model_is_used_when_present(self):
+        self.assertEqual(self.patched(["gemma3:12b", "mistral:24b"]), "gemma3:12b")
+        self.assertEqual(self.said, [])
+
+    def test_an_absent_model_steps_down_and_says_so(self):
+        self.assertEqual(self.patched(["mistral:24b"]), "mistral:24b")
+        self.assertIn("isn't pulled", self.said[0])
+        self.assertIn("ollama pull gemma3:12b", self.said[0])
+
+    def test_ollama_being_unreachable_does_not_silently_switch(self):
+        self.assertEqual(self.patched([]), "gemma3:12b")
+        self.assertEqual(self.said, [])
+
+    def test_no_override_means_no_lookup_at_all(self):
+        from lazycatalog import cli
+        cfg = self.cfg(suggest_model="mistral:24b")
+        self.assertEqual(cli._suggest_model(cfg, self.said.append), "mistral:24b")
+
+    def test_an_empty_suggest_model_uses_the_configured_one(self):
+        from lazycatalog import cli
+        cfg = self.cfg(suggest_model="")
+        self.assertEqual(cli._suggest_model(cfg, self.said.append), "mistral:24b")
