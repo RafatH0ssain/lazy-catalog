@@ -34,6 +34,10 @@ lazy-catalog update    # builds the catalogue
 lazy-catalog install   # watch the folder from now on
 ```
 
+Either key can be replaced on its own later with `lazy-catalog key tmdb` or
+`lazy-catalog key omdb`, without walking through the rest of setup. A new OMDb
+key does not work until you click the activation link OMDb emails you.
+
 `init` also asks for an optional [OMDb key](https://www.omdbapi.com/apikey.aspx)
 (free, instant). With one you get Rotten Tomatoes, Metacritic and IMDb scores
 alongside the TMDB rating, looked up by the IMDb id TMDB already returns — so
@@ -135,7 +139,7 @@ Subtitles only download when you ask, capped at 25 files per run, because free
 providers are rate limited and one long series would spend the day's quota.
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 300 tests
+python3 -m unittest discover -s tests -t .   # 305 tests
 ```
 
 MIT.

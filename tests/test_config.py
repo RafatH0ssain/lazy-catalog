@@ -56,3 +56,27 @@ class ConfigTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KeyShapeTest(unittest.TestCase):
+    """TMDB and OMDb keys look nothing alike; say so instead of just failing."""
+
+    def shape(self, key):
+        from lazycatalog import cli
+        return cli._key_shape(key)
+
+    def test_a_32_character_hex_key_is_tmdb_v3(self):
+        self.assertEqual(self.shape("0123456789abcdef0123456789abcdef"), "tmdb")
+
+    def test_a_jwt_is_tmdb_v4(self):
+        self.assertEqual(self.shape("eyJhbGciOi.payload.signature"), "tmdb")
+
+    def test_an_eight_character_key_is_omdb(self):
+        self.assertEqual(self.shape("3271bb3b"), "omdb")
+
+    def test_an_eight_character_alphanumeric_key_is_omdb(self):
+        self.assertEqual(self.shape("ab12cd34"), "omdb")
+
+    def test_anything_else_is_unknown(self):
+        self.assertEqual(self.shape("hello"), "unknown")
+        self.assertEqual(self.shape(""), "unknown")

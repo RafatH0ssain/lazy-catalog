@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -28,6 +29,85 @@ def _ask(prompt: str, default: str = "") -> str:
 
 
 # -- init --------------------------------------------------------------
+
+def _key_shape(key: str) -> str:
+    """Guess which service a key belongs to, from its shape alone.
+
+    A TMDB v3 key is 32 hex characters and a v4 token is a JWT; an OMDb key is
+    eight. Telling someone they pasted the right key at the wrong prompt is a
+    great deal more useful than "rejected".
+    """
+    key = (key or "").strip()
+    if key.startswith("ey") and key.count(".") == 2:
+        return "tmdb"
+    if re.fullmatch(r"[0-9a-fA-F]{32}", key):
+        return "tmdb"
+    if re.fullmatch(r"[0-9a-zA-Z]{8}", key):
+        return "omdb"
+    return "unknown"
+
+
+def _prompt_key(label: str, current: str) -> str:
+    prompt = "{} key [enter to keep existing]: ".format(label) if current \
+        else "{} key: ".format(label)
+    try:
+        return getpass.getpass(prompt).strip() or current
+    except (EOFError, KeyboardInterrupt):
+        return current
+
+
+def cmd_key(args: argparse.Namespace) -> int:
+    """Set one API key without walking through the whole of init."""
+    try:
+        cfg = config.load()
+    except config.ConfigError as exc:
+        _say(str(exc))
+        return 1
+
+    service = args.service
+    field = "tmdb_api_key" if service == "tmdb" else "omdb_api_key"
+    label = "TMDB" if service == "tmdb" else "OMDb"
+
+    _say("Paste your {} key. Typing is hidden.".format(label))
+    key = _prompt_key(label, cfg.get(field) or "")
+    if not key:
+        _say("Nothing entered; unchanged.")
+        return 1
+
+    shape = _key_shape(key)
+    if shape != "unknown" and shape != service:
+        other = "OMDb" if shape == "omdb" else "TMDB"
+        _say("  ✗ That looks like a {} key, not a {} one. Nothing saved.".format(
+            other, label))
+        _say("    Try: lazy-catalog key {}".format(shape))
+        return 1
+
+    if service == "tmdb":
+        try:
+            tmdb.Client(key).verify()
+        except tmdb.AuthError:
+            _say("  ✗ TMDB rejected that key.")
+            return 1
+        except tmdb.TMDBError as exc:
+            _say("  ! Couldn't reach TMDB to check it ({}). Saving anyway.".format(exc))
+    else:
+        try:
+            omdb.Client(key).verify()
+        except omdb.AuthError:
+            _say("  ✗ OMDb rejected that key.")
+            _say("    New OMDb keys need the activation link in the email they")
+            _say("    sent you — until you click it, the key returns 'Invalid'.")
+            return 1
+        except Exception as exc:
+            _say("  ! Couldn't reach OMDb to check it ({}). Saving anyway.".format(exc))
+
+    cfg[field] = key
+    config.save(cfg)
+    _say("  ✓ Saved to {}".format(config.config_path()))
+    if service == "omdb":
+        _say("Run `lazy-catalog update` to backfill scores across the library.")
+    return 0
+
 
 def cmd_init(args: argparse.Namespace) -> int:
     """Interactive setup. The API key is never echoed or passed as an argument."""
@@ -58,6 +138,12 @@ def cmd_init(args: argparse.Namespace) -> int:
     if not key:
         _say("A key is required. Get one free at "
              "https://www.themoviedb.org/settings/api")
+        return 1
+
+    if _key_shape(key) == "omdb":
+        _say("  ✗ That is eight characters, which is an OMDb key — TMDB keys are")
+        _say("    32, or a long token starting 'ey'. The OMDb question is next;")
+        _say("    press enter here to keep your existing TMDB key.")
         return 1
 
     _say("Checking the key with TMDB...")
@@ -730,7 +816,11 @@ def build_parser() -> argparse.ArgumentParser:
         description="Catalogue a local film and TV library into CONTENTS.md.")
     subparsers = parser.add_subparsers(dest="command")
 
-    subparsers.add_parser("init", help="set up the config and TMDB key")
+    subparsers.add_parser("init", help="set up the config and API keys")
+
+    keyer = subparsers.add_parser("key", help="set one API key on its own")
+    keyer.add_argument("service", choices=("tmdb", "omdb"),
+                       help="which key to replace")
 
     for name, help_text in (("update", "catalogue new folders"),
                             ("rebuild", "discard the cache and start over")):
@@ -823,6 +913,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     handlers = {
         "init": cmd_init,
+        "key": cmd_key,
         "update": cmd_update,
         "rebuild": cmd_rebuild,
         "status": cmd_status,
