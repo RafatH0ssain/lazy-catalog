@@ -246,7 +246,7 @@ def cmd_pick(args: argparse.Namespace) -> int:
 
     request = " ".join(args.request).strip() or "something good tonight"
     result, error = pick.choose(records, request, cfg["ollama_host"],
-                                cfg["ollama_model"])
+                                args.model or cfg["ollama_model"])
     if error:
         _say(error)
         return 1
@@ -633,6 +633,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help="films only")
     picker.add_argument("--series", dest="kind", action="store_const", const="series",
                         help="series only")
+    picker.add_argument("--model", help="override the configured Ollama model")
     picker.set_defaults(kind=None)
 
     suggester = subparsers.add_parser(

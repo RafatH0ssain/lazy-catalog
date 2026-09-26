@@ -77,11 +77,14 @@ invented is dropped, and the year, runtime, genres and rating shown are TMDB's,
 not the model's. Survivors are appended to `WATCHLIST.md` with checkboxes, and
 nothing is ever suggested twice.
 
-Different models are good at different halves of this. Recalling unowned films
-rewards breadth rather than reasoning, so `suggest` defaults to `gemma3:12b`
-while everything else uses `ollama_model` — set `suggest_model` in the config
-to change it, or `--model` for one run. If the model isn't pulled it steps down
-to your configured one and tells you.
+Both commands take `--model` if you want to try another one, and `suggest_model`
+in the config can differ from `ollama_model`.
+
+A 12B model is the default deliberately. On a 24GB machine a 24B measured 20GB
+resident and 12.7s per call against 8.6GB and 4.7s for a 12B, with tags that
+were no better — and the background job runs unattended, so a model that large
+just makes the machine feel slow. Models are also released after a minute
+rather than Ollama's default five.
 
 Click any title to expand it, then click its poster to play it in VLC.
 
@@ -111,7 +114,7 @@ Subtitles only download when you ask, capped at 25 files per run, because free
 providers are rate limited and one long series would spend the day's quota.
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 219 tests
+python3 -m unittest discover -s tests -t .   # 228 tests
 ```
 
 MIT.

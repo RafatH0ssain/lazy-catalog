@@ -36,6 +36,11 @@ class CatalogTest(unittest.TestCase):
     def cache(self) -> Cache:
         return Cache.load(config.state_dir(self.cfg) / catalog.CACHE_NAME)
 
+    def cache_save(self, record) -> None:
+        cache = self.cache()
+        cache.put(record)
+        cache.save()
+
     # -- first import --------------------------------------------------
 
     def test_first_run_publishes_immediately(self):
@@ -179,6 +184,31 @@ class CatalogTest(unittest.TestCase):
         result = self.run_update()
         self.assertEqual(result["pending"], [])
         self.assertIn("**Leviticus**", self.contents())
+
+    def test_a_parser_improvement_reaches_titles_that_never_matched(self):
+        """An unenriched title is only ever our own guess, so it should track
+        the parser rather than keep a guess made by an older version."""
+        make(self.root, "Show Season 1 720p BluRay- mRs/ep.mkv")
+        self.run_update()
+        record = self.cache().get("Show Season 1 720p BluRay- mRs")
+        record["title"] = "Show Season 1"          # what an older parser stored
+        self.cache_save(record)
+
+        self.run_update()
+        self.assertEqual(self.cache().get("Show Season 1 720p BluRay- mRs")["title"],
+                         "Show")
+
+    def test_a_title_confirmed_by_tmdb_is_left_alone(self):
+        """TMDB's name is better than ours; don't overwrite it with a guess."""
+        make(self.root, "Show Season 1 720p BluRay- mRs/ep.mkv")
+        self.run_update()
+        record = self.cache().get("Show Season 1 720p BluRay- mRs")
+        record.update(title="Game of Thrones", enriched=True)
+        self.cache_save(record)
+
+        self.run_update()
+        self.assertEqual(self.cache().get("Show Season 1 720p BluRay- mRs")["title"],
+                         "Game of Thrones")
 
     def test_missing_library_raises(self):
         cfg = dict(self.cfg, library_path=str(self.root / "nope"))

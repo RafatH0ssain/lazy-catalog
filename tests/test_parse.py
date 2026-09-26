@@ -62,6 +62,35 @@ class ParseTitleTest(unittest.TestCase):
         self.assertEqual(got.title, "1917")
         self.assertEqual(got.year, 2019)
 
+    def test_a_spaced_season_marker_is_cut_from_the_title(self):
+        """"Season 1" is two tokens, so a token-by-token scan walks past it."""
+        got = parse.parse_folder("Game of Thrones Season 1 720p BluRay- mRs")
+        self.assertEqual(got.title, "Game of Thrones")
+        self.assertTrue(got.series_hint)
+        self.assertEqual(got.season_hint, [1])
+
+    def test_season_markers_in_every_spelling_are_cut(self):
+        for folder in ("Game of Thrones Season 1 720p BluRay- mRs",
+                       "Game.of.Thrones.S04.1080p.BluRay.x265-RARBG",
+                       "Game of Thrones Seasons 1-8 COMPLETE 1080p",
+                       "Game.of.Thrones.S01E01.Winter.Is.Coming.1080p",
+                       "Game of Thrones 1x01 1080p"):
+            with self.subTest(folder=folder):
+                self.assertEqual(parse.parse_folder(folder).title,
+                                 "Game of Thrones")
+
+    def test_a_cut_title_is_not_reported_as_low_confidence(self):
+        """It was cut at a marker we understood, so the model needn't guess."""
+        self.assertEqual(
+            parse.parse_folder("Game of Thrones Season 1 720p").confidence,
+            "medium")
+
+    def test_a_title_containing_the_word_season_is_not_truncated(self):
+        """Only a season *number* marks the end of a title."""
+        got = parse.parse_folder("Season of the Witch (2011) [1080p]")
+        self.assertEqual(got.title, "Season of the Witch")
+        self.assertFalse(got.series_hint)
+
     def test_unparseable_name_reports_low_confidence(self):
         got = parse.parse_folder("xX_rip_final_v2_Xx")
         self.assertEqual(got.confidence, "low")

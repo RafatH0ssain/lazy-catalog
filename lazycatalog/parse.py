@@ -116,6 +116,21 @@ def _series_markers(name: str) -> Tuple[bool, List[int]]:
     return hit, sorted(set(seasons))
 
 
+def _series_cut(text: str) -> Optional[int]:
+    """Where a season or episode marker starts, if one does.
+
+    The title scan below works token by token, which cannot see a marker
+    spelled across two of them: "Game of Thrones Season 1" walks straight past
+    "Season" because the number lives in the next token. Searching the whole
+    string first catches every spelling — "Season 1", "S04", "S01E01", "1x01".
+    """
+    starts = [match.start() for match in (
+        SEASON_WORD_RE.search(text), SXX_RE.search(text),
+        SXXEYY_RE.search(text), NxNN_RE.search(text)) if match]
+    starts = [start for start in starts if start > 0]
+    return min(starts) if starts else None
+
+
 def parse_folder(name: str) -> ParsedName:
     """Best-effort (title, year) for one library folder."""
     text = _normalise(name)
@@ -146,7 +161,11 @@ def parse_folder(name: str) -> ParsedName:
             confidence="high",
         )
 
-    # No usable year: keep tokens until the first release-metadata token.
+    # No usable year: cut at a season marker if there is one, then keep tokens
+    # until the first release-metadata token.
+    cut = _series_cut(text)
+    if cut is not None:
+        text = text[:cut]
     tokens = text.split(" ")
     kept: List[str] = []
     stopped = False
@@ -157,7 +176,7 @@ def parse_folder(name: str) -> ParsedName:
         kept.append(token)
 
     title = _clean_title(" ".join(kept))
-    if title and stopped:
+    if title and (stopped or cut is not None):
         confidence = "medium"
     else:
         confidence = "low"

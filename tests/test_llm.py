@@ -90,3 +90,29 @@ class ListModelsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KeepAliveTest(unittest.TestCase):
+    """A model left resident after an unattended run makes the machine slow."""
+
+    def capture(self):
+        sent = {}
+
+        def opener(request, timeout=None):
+            sent.update(json.loads(request.data.decode()))
+            return FakeResponse(json.dumps({"response": "ok"}).encode())
+
+        return sent, opener
+
+    def test_every_call_asks_ollama_to_release_the_model(self):
+        sent, opener = self.capture()
+        llm.generate("http://x", "m", "hi", opener=opener)
+        self.assertEqual(sent["keep_alive"], llm.KEEP_ALIVE)
+
+    def test_the_hold_is_short_but_long_enough_to_batch(self):
+        self.assertEqual(llm.KEEP_ALIVE, "60s")
+
+    def test_mood_tagging_releases_it_too(self):
+        sent, opener = self.capture()
+        llm.mood_tags("http://x", "m", "Her", 2013, [], "", opener=opener)
+        self.assertIn("keep_alive", sent)

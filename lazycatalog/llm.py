@@ -16,6 +16,13 @@ from typing import Any, Dict, List, Optional, Tuple
 
 TIMEOUT = 180
 
+# Ollama holds a model in memory for five minutes after a call by default. A
+# 12B model is most of a laptop's RAM, and the background job runs unattended,
+# so that is five minutes of a machine feeling slow for no one's benefit. A
+# minute is long enough to cover a run tagging several new titles in a row
+# without reloading between them.
+KEEP_ALIVE = "60s"
+
 MOOD_SYSTEM = (
     "You tag films and TV by how they feel to watch. "
     "Reply with 2 to 4 short lowercase tags separated by commas. "
@@ -69,6 +76,7 @@ def generate(
         "model": model,
         "prompt": prompt,
         "stream": False,
+        "keep_alive": KEEP_ALIVE,
         "options": {"temperature": temperature},
     }
     if system:

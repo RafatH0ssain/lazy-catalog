@@ -48,6 +48,12 @@ def _apply_local_facts(record: Dict[str, Any], entry: scan.Entry) -> None:
     worse one, subtitles get downloaded, a season is added.
     """
     record["kind"] = entry.kind
+    # Until TMDB has confirmed a title, it is only this parser's reading of the
+    # folder name — so keep it in step with the parser. Once enriched, TMDB's
+    # name is authoritative and is left alone.
+    if not record.get("enriched"):
+        record["title"] = entry.parsed.title
+        record["year"] = entry.parsed.year
     record["total_size"] = entry.total_size
     record["episode_count"] = entry.episode_count
     record["specials"] = entry.specials

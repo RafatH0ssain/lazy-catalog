@@ -19,7 +19,10 @@ DEFAULTS: Dict[str, Any] = {
     "library_path": "~/TV",
     "tmdb_api_key": "",
     "ollama_host": "http://localhost:11434",
-    "ollama_model": "huihui_ai/mistral-small-abliterated:24b",
+    # 12B is the sweet spot here: on a 24GB machine the 24B model measured
+    # 20GB resident and 12.7s per call, against 8.6GB and 4.7s for this, with
+    # tags that were no better. None of these jobs need the extra weight.
+    "ollama_model": "gemma3:12b",
     # Recalling films you don't own rewards breadth over reasoning, so the best
     # model for `suggest` is often not the best one for `pick`: gemma3 returns
     # less obvious picks here, and twice as fast. Falls back to ollama_model if
