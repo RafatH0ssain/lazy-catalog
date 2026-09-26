@@ -590,17 +590,11 @@ def delete_title(cfg, needle: str, force: bool = False, confirm=input,
         return 1
 
     record = matches[0]
-    target = library / record["key"]
-    ok, why = trash.check(target, library)
-    if not ok:
-        report(why)
-        return 1
-
     label = record.get("title") or record["key"]
     if record.get("year"):
         label += " ({})".format(record["year"])
     report("{}  {}".format(label, render_md.human_size(record.get("total_size") or 0)))
-    report("  {}".format(target))
+    report("  {}".format(library / record["key"]))
 
     if not force:
         answer = confirm("Move to Trash? [y/N] ")
@@ -608,22 +602,9 @@ def delete_title(cfg, needle: str, force: bool = False, confirm=input,
             report("Left alone.")
             return 1
 
-    moved, message = trasher(target)
-    if not moved:
-        report("Could not move it: {}".format(message))
-        return 1
-
-    # Only now is the record dropped: if Finder refused, the catalogue should
-    # still describe what is actually on disk.
-    cache.remove(record["key"])
-    cache.save()
-    ready = cache.ready()
-    (library / catalog.CONTENTS_NAME).write_text(
-        render_md.render(ready), encoding="utf-8")
-    catalog.write_web(cfg, ready)
-
-    report("{} — {}".format(message, label))
-    return 0
+    done, message = catalog.delete_by_key(cfg, record["key"], trasher=trasher)
+    report(message)
+    return 0 if done else 1
 
 
 def cmd_delete(args: argparse.Namespace) -> int:

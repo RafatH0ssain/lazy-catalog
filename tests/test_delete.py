@@ -188,3 +188,58 @@ class DeleteCommandTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeleteByKeyTest(unittest.TestCase):
+    """The shared mechanism, used by both the CLI and the web endpoint."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name) / "TV"
+        self.root.mkdir()
+        make(self.root, "Her (2013) [1080p]/Her.mkv", 2048)
+        make(self.root, "Dogma (1999)/Dogma.mkv", 1024)
+        self.cfg = dict(config.DEFAULTS, library_path=str(self.root))
+        catalog.update(self.cfg, settle_rounds=0)
+        self.trashed = []
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def trasher(self, path):
+        self.trashed.append(path)
+        return True, "Moved to Trash"
+
+    def cache(self):
+        return Cache.load(config.state_dir(self.cfg) / catalog.CACHE_NAME)
+
+    def test_an_exact_key_is_deleted_without_any_matching(self):
+        ok, message = catalog.delete_by_key(
+            self.cfg, "Her (2013) [1080p]", trasher=self.trasher)
+        self.assertTrue(ok)
+        self.assertIn("Her", message)
+        self.assertIsNone(self.cache().get("Her (2013) [1080p]"))
+
+    def test_an_unknown_key_is_refused(self):
+        ok, message = catalog.delete_by_key(self.cfg, "Nope", trasher=self.trasher)
+        self.assertFalse(ok)
+        self.assertEqual(self.trashed, [])
+
+    def test_a_key_escaping_the_library_is_refused(self):
+        ok, message = catalog.delete_by_key(
+            self.cfg, "../../etc", trasher=self.trasher)
+        self.assertFalse(ok)
+        self.assertEqual(self.trashed, [])
+
+    def test_a_failed_move_keeps_the_record(self):
+        ok, _ = catalog.delete_by_key(
+            self.cfg, "Dogma (1999)", trasher=lambda p: (False, "Finder refused"))
+        self.assertFalse(ok)
+        self.assertIsNotNone(self.cache().get("Dogma (1999)"))
+
+    def test_both_views_are_rewritten_after_a_delete(self):
+        catalog.delete_by_key(self.cfg, "Her (2013) [1080p]", trasher=self.trasher)
+        contents = (self.root / catalog.CONTENTS_NAME).read_text(encoding="utf-8")
+        page = (config.state_dir(self.cfg) / catalog.WEB_NAME).read_text(encoding="utf-8")
+        self.assertNotIn("**Her**", contents)
+        self.assertNotIn('"Her (2013) [1080p]"', page)

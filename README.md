@@ -104,7 +104,9 @@ they are good at different things: asked for something "slow and bleak", gemma4
 named Stalker, Threads and The Turin Horse where gemma3 offered Winter's Bone —
 but gemma3 is faster and picks better from a list it is handed.
 
-Click any title to expand it, then click its poster to play it in VLC.
+Click any title to expand it, then click its poster to play it in VLC, or
+"Move to Trash" to delete it. Both only appear while `movies` is running,
+since a page opened straight off disk has no way to reach your machine.
 
 Mark things watched by ticking the box in `CONTENTS.md`. That's the only place
 it's set; it's read back on every run and survives regeneration, even if the
@@ -139,7 +141,7 @@ Subtitles only download when you ask, capped at 25 files per run, because free
 providers are rate limited and one long series would spend the day's quota.
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 286 tests
+python3 -m unittest discover -s tests -t .   # 299 tests
 ```
 
 MIT.

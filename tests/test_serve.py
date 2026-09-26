@@ -28,14 +28,19 @@ class ServeTestBase(unittest.TestCase):
         catalog.update(self.cfg, settle_rounds=0)
 
         self.launched = []
+        self.trashed = []
         self.server, self.url, self.token = serve.start(
-            self.cfg, 0, launcher=self._fake_launch)
+            self.cfg, 0, launcher=self._fake_launch, trasher=self._fake_trash)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
 
     def _fake_launch(self, path):
         self.launched.append(path)
         return True, "Playing {} in VLC".format(path.name)
+
+    def _fake_trash(self, path):
+        self.trashed.append(path)
+        return True, "Moved to Trash"
 
     def tearDown(self):
         self.server.shutdown()
@@ -181,3 +186,52 @@ class PrimaryVideoTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeleteEndpointTest(ServeTestBase):
+    """Strictly more dangerous than /play, so the same guards must hold."""
+
+    def delete(self, key, token=None, origin=None):
+        request = urllib.request.Request(
+            self.url + "delete",
+            data=json.dumps({"key": key}).encode(),
+            headers={"Content-Type": "application/json",
+                     "X-Lazy-Token": self.token if token is None else token},
+            method="POST")
+        if origin:
+            request.add_header("Origin", origin)
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                return response.status, json.loads(response.read())
+        except urllib.error.HTTPError as exc:
+            return exc.code, json.loads(exc.read())
+
+    def test_a_valid_key_is_moved_to_trash_and_dropped(self):
+        status, body = self.delete("Her (2013)")
+        self.assertEqual(status, 200)
+        self.assertTrue(body["ok"])
+        self.assertEqual(self.trashed[0].name, "Her (2013)")
+        cache = Cache.load(config.state_dir(self.cfg) / catalog.CACHE_NAME)
+        self.assertIsNone(cache.get("Her (2013)"))
+
+    def test_without_the_token_nothing_is_deleted(self):
+        status, _ = self.delete("Her (2013)", token="wrong")
+        self.assertEqual(status, 403)
+        self.assertEqual(self.trashed, [])
+
+    def test_a_foreign_origin_cannot_delete(self):
+        status, _ = self.delete("Her (2013)", origin="https://evil.example")
+        self.assertEqual(status, 403)
+        self.assertEqual(self.trashed, [])
+
+    def test_a_path_passed_as_a_key_is_refused(self):
+        for attempt in ("../Outside", "/etc", "Her (2013)/../../Outside"):
+            with self.subTest(attempt=attempt):
+                status, _ = self.delete(attempt)
+                self.assertEqual(status, 409)
+        self.assertEqual(self.trashed, [])
+
+    def test_an_unknown_title_is_refused(self):
+        status, body = self.delete("Not Catalogued")
+        self.assertEqual(status, 409)
+        self.assertIn("isn't in the catalogue", body["error"])

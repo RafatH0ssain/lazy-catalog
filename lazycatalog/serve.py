@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse
 
-from . import catalog, config, render_web
+from . import catalog, config, render_web, trash
 from .cache import Cache
 
 PLAYER = "VLC"
@@ -83,10 +83,11 @@ class Player:
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args: Any, cfg: Dict[str, Any], token: str,
-                 player: Player, **kwargs: Any):
+                 player: Player, trasher=None, **kwargs: Any):
         self.cfg = cfg
         self.token = token
         self.player = player
+        self.trasher = trasher or trash.move
         super().__init__(*args, directory=str(config.state_dir(cfg)), **kwargs)
 
     # Quiet by default; the terminal is the user's, not a request log.
@@ -127,7 +128,7 @@ class Handler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self) -> None:
-        if self.path != "/play":
+        if self.path not in ("/play", "/delete"):
             self._json(404, {"ok": False, "error": "Unknown endpoint."})
             return
         if not self._authorised():
@@ -149,18 +150,26 @@ class Handler(SimpleHTTPRequestHandler):
             self._json(400, {"ok": False, "error": "Bad request."})
             return
 
-        ok, message = self.player.play(key)
+        if self.path == "/delete":
+            # Deleting is the same code path the CLI uses, guards included:
+            # it takes a cache key, never a path, and proves what that key
+            # resolves to before anything moves.
+            ok, message = catalog.delete_by_key(self.cfg, key, trasher=self.trasher)
+        else:
+            ok, message = self.player.play(key)
+
         self._json(200 if ok else 409, {"ok": ok,
                                         "error": None if ok else message,
                                         "message": message if ok else None})
 
 
-def start(cfg: Dict[str, Any], port: int = 0,
-          launcher=None) -> Tuple[ThreadingHTTPServer, str, str]:
+def start(cfg: Dict[str, Any], port: int = 0, launcher=None, trasher=None
+          ) -> Tuple[ThreadingHTTPServer, str, str]:
     """Start the server on localhost. Returns (server, url, token)."""
     token = secrets.token_urlsafe(24)
     player = Player(cfg, launcher=launcher)
-    handler = partial(Handler, cfg=cfg, token=token, player=player)
+    handler = partial(Handler, cfg=cfg, token=token, player=player,
+                      trasher=trasher)
 
     server = ThreadingHTTPServer(("127.0.0.1", port), handler)
     server.daemon_threads = True

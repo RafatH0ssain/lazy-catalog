@@ -10,9 +10,9 @@ from __future__ import annotations
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import config, probe, render_md, scan
+from . import config, probe, render_md, scan, trash
 from .cache import Cache, new_record
 
 CONTENTS_NAME = "CONTENTS.md"
@@ -232,6 +232,45 @@ def _settle(
         pending = sweep()
 
     return pending
+
+
+def delete_by_key(cfg: Dict[str, Any], key: str, trasher=trash.move
+                  ) -> Tuple[bool, str]:
+    """Move one catalogued title to the Trash. Returns (done, message).
+
+    Takes the cache key rather than a path, and proves the path it resolves to
+    is inside the library before anything moves — the caller may be a web
+    request, and a stale or hand-edited cache must not be able to point this
+    somewhere else.
+    """
+    from .cache import Cache
+
+    library = config.library_path(cfg)
+    cache = Cache.load(config.state_dir(cfg) / CACHE_NAME)
+    record = cache.get(key)
+    if record is None:
+        return False, "That title isn't in the catalogue."
+
+    target = library / key
+    ok, why = trash.check(target, library)
+    if not ok:
+        return False, why
+
+    moved, message = trasher(target)
+    if not moved:
+        # The catalogue should keep describing what is actually on disk.
+        return False, "Could not move it: {}".format(message)
+
+    label = record.get("title") or key
+    if record.get("year"):
+        label += " ({})".format(record["year"])
+
+    cache.remove(key)
+    cache.save()
+    ready = cache.ready()
+    (library / CONTENTS_NAME).write_text(render_md.render(ready), encoding="utf-8")
+    write_web(cfg, ready)
+    return True, "Moved {} to Trash".format(label)
 
 
 def rebuild(cfg: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:

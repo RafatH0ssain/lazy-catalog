@@ -193,6 +193,17 @@ dialog[open] { animation: lift .32s var(--ease); }
 .sheet dd { margin: 0; }
 .sheet dd code { font: 400 11.5px/1.7 var(--util); color: var(--paper-2);
   letter-spacing: .04em; word-break: break-word; }
+/* Deliberately quiet, and only in the detail view: a delete control on the
+   grid would sit one stray click away from every poster. */
+.sheet .actions { display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; margin-top: 4px; }
+.sheet button.remove { font: 400 10.5px/1 var(--util); letter-spacing: .14em;
+  text-transform: uppercase; color: var(--dim); background: none; border: 0;
+  padding: 4px 0; cursor: pointer; border-bottom: 1px solid transparent;
+  transition: color .18s var(--ease), border-color .18s var(--ease); }
+.sheet button.remove:hover { color: var(--velvet); border-bottom-color: var(--velvet); }
+.sheet button.remove:focus-visible { outline: 2px solid var(--lamp); outline-offset: 3px; }
+.sheet button.remove[aria-busy="true"] { color: var(--velvet); }
 .sheet a.tmdb { font: 400 11px/1 var(--util); letter-spacing: .14em;
   text-transform: uppercase; color: var(--lamp); text-decoration: none;
   border-bottom: 1px solid currentColor; padding-bottom: 3px; }
@@ -438,6 +449,45 @@ function render() {
 
 function dd(term, value) { return value ? `<dt>${term}</dt><dd>${value}</dd>` : ""; }
 
+function sizeOf(d) {
+  const match = /(\d[\d.]*\s?[KMGT]?B)\s*$/.exec(d.tech || "");
+  return match ? match[1] : "";
+}
+
+async function del(d, button) {
+  if (button.getAttribute("aria-busy") === "true") return;
+  const size = sizeOf(d);
+  const name = d.title + (d.year ? ` (${d.year})` : "");
+  if (!window.confirm(`Move ${name} to Trash?${size ? "\n\n" + size : ""}`)) return;
+
+  button.setAttribute("aria-busy", "true");
+  button.textContent = "Moving";
+  try {
+    const response = await fetch("/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Lazy-Token": TOKEN },
+      body: JSON.stringify({ key: d.key }),
+    });
+    const result = await response.json();
+    if (result.ok) {
+      // Drop it locally rather than reloading, so filters and scroll survive.
+      const index = DATA.findIndex(x => x.key === d.key);
+      if (index > -1) DATA.splice(index, 1);
+      $("sheet").close();
+      render();
+      toast(result.message);
+    } else {
+      toast(result.error, true);
+      button.textContent = "Move to Trash";
+      button.setAttribute("aria-busy", "false");
+    }
+  } catch (err) {
+    toast("Couldn't reach the lazy-catalog helper. Is `movies` still running?", true);
+    button.textContent = "Move to Trash";
+    button.setAttribute("aria-busy", "false");
+  }
+}
+
 let toastTimer;
 function toast(message, bad) {
   const el = $("toast");
@@ -495,11 +545,16 @@ function openSheet(d) {
         ${dd("File", `<code>${esc(d.tech || "")}</code>`)}
         ${dd("Folder", `<code>${esc(d.key)}</code>`)}
       </dl>
-      ${d.tmdb ? `<a class="tmdb" href="${esc(d.tmdb)}" target="_blank" rel="noopener">TMDB &rarr;</a>` : ""}
+      <div class="actions">
+        ${d.tmdb ? `<a class="tmdb" href="${esc(d.tmdb)}" target="_blank" rel="noopener">TMDB &rarr;</a>` : "<span></span>"}
+        ${TOKEN ? `<button class="remove" type="button">Move to Trash</button>` : ""}
+      </div>
     </div></div>`;
 
   const button = $("sheetBody").querySelector("button.play");
   if (button) button.onclick = () => play(d, button);
+  const remove = $("sheetBody").querySelector("button.remove");
+  if (remove) remove.onclick = () => del(d, remove);
   $("sheet").showModal();
 }
 

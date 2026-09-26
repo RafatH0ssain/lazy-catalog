@@ -101,3 +101,23 @@ class WebOutputTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ControlGatingTest(unittest.TestCase):
+    """Play and delete only work through the local helper, so a page opened
+    straight off disk must not offer them."""
+
+    def page(self, token=""):
+        rec = record("Her (2013)", "Her", 2013, video="Her (2013)/Her.mkv")
+        return render_web.render([rec], token=token)
+
+    def test_a_file_opened_off_disk_has_an_empty_token(self):
+        self.assertIn('const TOKEN = "";', self.page())
+
+    def test_a_served_page_carries_the_token(self):
+        self.assertIn('const TOKEN = "abc123";', self.page("abc123"))
+
+    def test_both_controls_are_gated_on_the_token(self):
+        html = self.page("abc123")
+        self.assertIn("TOKEN ?", html)          # delete control
+        self.assertIn("canPlay", html)          # play control
