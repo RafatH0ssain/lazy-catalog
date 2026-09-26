@@ -117,8 +117,15 @@ way to launch it. The play endpoint takes a catalogue key, never a path, looks
 the file up itself, refuses anything that doesn't resolve inside your library,
 and requires a token that only the page it served knows.
 
-New folders aren't published until their size stops changing, so a
+New titles aren't published until their size stops changing, so a
 half-finished download never lands in the catalogue.
+
+Reading a release name is guesswork with rules. A bracketed `(2017)` is taken
+as the release year over any bare number, and a year that hasn't happened yet
+is treated as part of the title — which is how *Blade Runner 2049 (2017)* comes
+out as the 2017 film rather than a 2049 one. Season markers end a title in
+every spelling (`Season 1`, `S04`, `S01E01`, `1x01`), and anything under an
+`Extras` folder is excluded from episode counts and from playback.
 
 Your files are never renamed or moved. `suggest-renames` prints what it would
 do and stops — and `lazy-catalog nfo` gets you media-server recognition without
@@ -128,7 +135,7 @@ Subtitles only download when you ask, capped at 25 files per run, because free
 providers are rate limited and one long series would spend the day's quota.
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 294 tests
+python3 -m unittest discover -s tests -t .   # 300 tests
 ```
 
 MIT.

@@ -91,6 +91,38 @@ class ParseTitleTest(unittest.TestCase):
         self.assertEqual(got.title, "Season of the Witch")
         self.assertFalse(got.series_hint)
 
+    def test_a_number_in_the_title_is_not_mistaken_for_the_release_year(self):
+        """Blade Runner 2049 came out in 2017."""
+        got = parse.parse_folder("Blade Runner 2049 (2017)")
+        self.assertEqual(got.title, "Blade Runner 2049")
+        self.assertEqual(got.year, 2017)
+
+    def test_a_bracketed_year_beats_a_bare_one_anywhere_in_the_name(self):
+        got = parse.parse_folder("Death Race 2000 (1975) [1080p]")
+        self.assertEqual(got.title, "Death Race 2000")
+        self.assertEqual(got.year, 1975)
+
+    def test_with_no_brackets_an_impossible_year_is_skipped(self):
+        got = parse.parse_folder("Blade.Runner.2049.2017.1080p.BluRay.x264-GROUP")
+        self.assertEqual(got.title, "Blade Runner 2049")
+        self.assertEqual(got.year, 2017)
+
+    def test_a_title_number_with_no_release_year_at_all_keeps_the_number(self):
+        got = parse.parse_folder("Blade Runner 2049 1080p BluRay x264")
+        self.assertEqual(got.title, "Blade Runner 2049")
+        self.assertIsNone(got.year)
+
+    def test_a_year_at_the_start_is_still_the_title(self):
+        got = parse.parse_folder("2001 A Space Odyssey (1968)")
+        self.assertEqual(got.title, "2001 A Space Odyssey")
+        self.assertEqual(got.year, 1968)
+
+    def test_this_years_films_are_not_treated_as_impossible(self):
+        from datetime import date
+        got = parse.parse_folder("Send Help {} 1080p WEB-DL".format(date.today().year))
+        self.assertEqual(got.title, "Send Help")
+        self.assertEqual(got.year, date.today().year)
+
     def test_unparseable_name_reports_low_confidence(self):
         got = parse.parse_folder("xX_rip_final_v2_Xx")
         self.assertEqual(got.confidence, "low")

@@ -1,8 +1,10 @@
 {
   "library_path": "~/TV",
   "tmdb_api_key": "",
+  "omdb_api_key": "",
   "ollama_host": "http://localhost:11434",
   "ollama_model": "gemma3:12b",
+  "suggest_model": "gemma4:12b",
   "language": "en-US",
   "subtitle_languages": ["en"]
 }

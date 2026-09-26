@@ -9,10 +9,17 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import date
 from typing import List, Optional, Tuple
 
 # A year, standalone. Bounded so "1080p", "x265" and "DDP5" can't match.
 YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
+
+# Nothing can have been released next year but a title can be named after any
+# year at all, so a number beyond this is part of the name: Blade Runner 2049
+# came out in 2017.
+def _latest_plausible_year() -> int:
+    return date.today().year + 1
 
 # Season/episode notation. Two digits after S keeps "DTS" and "SPARKS" out.
 SXXEYY_RE = re.compile(r"\bS(\d{1,2})E(\d{1,3})\b", re.IGNORECASE)
@@ -136,20 +143,35 @@ def parse_folder(name: str) -> ParsedName:
     text = _normalise(name)
     series_hint, season_hint = _series_markers(text)
 
-    # The first year that isn't the whole title: "2012 (2009)" and "1917.2019"
-    # both name a film whose title is a year, so a match at position zero is
-    # the title, not the release year.
+    # Which of the numbers in this name is the release year?
+    #
+    # Not one at position zero: "2012 (2009)" and "1917.2019" name films whose
+    # title is a year. Not one that hasn't happened yet: "Blade Runner 2049" is
+    # a title, and the 2017 beside it is the release. And a bracketed year wins
+    # outright, because "(2017)" is how a release year is written by hand.
     year: Optional[int] = None
     title_part: Optional[str] = None
+    latest = _latest_plausible_year()
+
+    candidates = []
     for match in YEAR_RE.finditer(text):
         if match.start() == 0:
             continue
-        candidate = _clean_title(text[: match.start()])
-        if not candidate:
+        title = _clean_title(text[: match.start()])
+        if not title:
             continue
-        year = int(match.group())
-        title_part = candidate
-        break
+        bracketed = (text[match.start() - 1] in "([{"
+                     and match.end() < len(text) and text[match.end()] in ")]}")
+        candidates.append((bracketed, int(match.group()), title))
+
+    for want_bracketed in (True, False):
+        for bracketed, value, title in candidates:
+            if bracketed is not want_bracketed or value > latest:
+                continue
+            year, title_part = value, title
+            break
+        if title_part:
+            break
 
     if title_part:
         return ParsedName(
