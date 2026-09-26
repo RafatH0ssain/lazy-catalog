@@ -34,6 +34,12 @@ lazy-catalog update    # builds the catalogue
 lazy-catalog install   # watch the folder from now on
 ```
 
+`init` also asks for an optional [OMDb key](https://www.omdbapi.com/apikey.aspx)
+(free, instant). With one you get Rotten Tomatoes, Metacritic and IMDb scores
+alongside the TMDB rating, looked up by the IMDb id TMDB already returns — so
+they can never land on the wrong film. Without one, everything else works the
+same.
+
 The TMDB key is [free and instant](https://www.themoviedb.org/settings/api).
 `init` takes it with hidden input and writes it to
 `~/.config/lazy-catalog/config.json` at mode 600 — never your shell history,
@@ -50,6 +56,7 @@ movies                    # open the library page; Ctrl+C stops it
 lazy-pick something short and funny
 lazy-suggest slow and bleak   # films you *don't* own, that you might like
 lazy-catalog subs --films # subtitles for anything missing them
+lazy-catalog delete lobster  # move a title to the Trash
 lazy-catalog nfo          # .nfo sidecars for Jellyfin, Kodi and Plex
 ```
 
@@ -83,8 +90,15 @@ in the config can differ from `ollama_model`.
 A 12B model is the default deliberately. On a 24GB machine a 24B measured 20GB
 resident and 12.7s per call against 8.6GB and 4.7s for a 12B, with tags that
 were no better — and the background job runs unattended, so a model that large
-just makes the machine feel slow. Models are also released after a minute
-rather than Ollama's default five.
+just makes the machine feel slow. Models are released after a minute rather
+than Ollama's default five, and reasoning is switched off: gemma4 spent 126
+tokens and 11.6s on a one-word answer with it on, and 3 tokens and 0.5s with
+it off. Nothing here wants visible chain-of-thought.
+
+`suggest` defaults to `gemma4:12b` and everything else to `gemma3:12b`, because
+they are good at different things: asked for something "slow and bleak", gemma4
+named Stalker, Threads and The Turin Horse where gemma3 offered Winter's Bone —
+but gemma3 is faster and picks better from a list it is handed.
 
 Click any title to expand it, then click its poster to play it in VLC.
 
@@ -114,7 +128,7 @@ Subtitles only download when you ask, capped at 25 files per run, because free
 providers are rate limited and one long series would spend the day's quota.
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 228 tests
+python3 -m unittest discover -s tests -t .   # 294 tests
 ```
 
 MIT.

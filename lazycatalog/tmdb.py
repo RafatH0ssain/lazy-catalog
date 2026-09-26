@@ -101,7 +101,8 @@ class Client:
 
     def details(self, tmdb_id: int, kind: str) -> Dict[str, Any]:
         path = "/tv/{}".format(tmdb_id) if kind == "series" else "/movie/{}".format(tmdb_id)
-        return self._get(path, append_to_response="credits")
+        # external_ids carries the IMDb id for series; films have it inline.
+        return self._get(path, append_to_response="credits,external_ids")
 
     def lookup(self, title: str, year: Optional[int], kind: str) -> Optional[Dict[str, Any]]:
         """Search then fetch details, normalised into cache fields."""
@@ -202,6 +203,10 @@ def normalise(details: Dict[str, Any], kind: str) -> Dict[str, Any]:
         # The canonical name, so a suggestion is filed under TMDB's spelling
         # rather than whatever the model typed.
         "title": details.get("title") or details.get("name") or "",
+        # What OMDb is looked up by, so critic scores can never land on the
+        # wrong film.
+        "imdb_id": (details.get("imdb_id")
+                    or (details.get("external_ids") or {}).get("imdb_id") or None),
         "tmdb_url": "{}/{}/{}".format(
             SITE_ROOT, "tv" if kind == "series" else "movie", details.get("id")),
         "overview": (details.get("overview") or "").strip(),

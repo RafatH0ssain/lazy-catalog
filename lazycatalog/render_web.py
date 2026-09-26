@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
+from . import omdb
 from .render_md import format_subs, human_duration, human_size
 
 TEMPLATE = Path(__file__).parent / "templates" / "page.html"
@@ -78,6 +79,7 @@ def _payload(record: Dict[str, Any]) -> Dict[str, Any]:
         "genres": record.get("genres") or [],
         "moods": record.get("moods") or [],
         "rating": record.get("rating"),
+        "scores": omdb.summary(record.get("ratings") or {}),
         "runtime": record.get("runtime"),
         "runtimeLabel": _runtime_label(record),
         "size": record.get("total_size") or 0,

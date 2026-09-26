@@ -131,6 +131,7 @@ option { background: var(--house-2); font-family: var(--body); text-transform: n
   text-transform: uppercase; color: var(--dim); margin-bottom: 10px; }
 .facts .star { color: var(--lamp); }
 .facts .unverified { color: var(--velvet); }
+.facts .scores { color: var(--paper-2); }
 .synopsis { margin: 0 0 12px; max-width: 62ch; color: var(--paper-2);
   font-size: 15px; line-height: 1.65; }
 .moods { font: 400 11px/1 var(--util); letter-spacing: .14em; text-transform: uppercase;
@@ -380,6 +381,7 @@ function factsHtml(d) {
   if (d.kind === "series") { if (d.seasonLine) bits.push(esc(d.seasonLine)); }
   else if (d.runtimeLabel) bits.push(esc(d.runtimeLabel));
   if (d.rating) bits.push(`<span class="star">${mark}★ ${d.rating.toFixed(1)}</span>`);
+  if (d.scores) bits.push(`<span class="scores">${esc(d.scores)}</span>`);
   return bits.join(" &nbsp;·&nbsp; ");
 }
 

@@ -36,6 +36,8 @@ def new_record(key: str, title: str, year: Optional[int], kind: str) -> Dict[str
         "director": None,
         "cast": [],
         "tmdb_id": None,
+        "imdb_id": None,
+        "ratings": {},              # rotten_tomatoes / metacritic / imdb
         "tmdb_url": None,
         "poster": None,
         "enriched": False,

@@ -33,7 +33,7 @@ class ConfigTest(unittest.TestCase):
         cfg = config.load()
         self.assertEqual(cfg["ollama_host"], "http://localhost:11434")
         self.assertEqual(cfg["subtitle_languages"], ["en"])
-        self.assertEqual(cfg["suggest_model"], "gemma3:12b")
+        self.assertEqual(cfg["suggest_model"], "gemma4:12b")
         self.assertEqual(cfg["ollama_model"], "gemma3:12b")
 
     def test_saved_config_is_not_readable_by_others(self):

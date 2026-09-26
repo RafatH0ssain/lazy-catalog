@@ -35,6 +35,7 @@ def opener_for(payloads):
 
 MOVIE_DETAILS = {
     "id": 1091,
+    "imdb_id": "tt0084787",
     "title": "The Thing",
     "overview": "A research team in Antarctica is hunted.",
     "genres": [{"name": "Horror"}, {"name": "Science Fiction"}],
@@ -52,6 +53,7 @@ MOVIE_DETAILS = {
 
 TV_DETAILS = {
     "id": 15260,
+    "external_ids": {"imdb_id": "tt1305826"},
     "name": "Adventure Time",
     "overview": "Finn and Jake.",
     "genres": [{"name": "Animation"}],
@@ -180,10 +182,12 @@ class NormaliseTest(unittest.TestCase):
         self.assertTrue(out["poster_url"].endswith("/abc.jpg"))
         self.assertEqual(out["tmdb_url"], "https://www.themoviedb.org/movie/1091")
         self.assertEqual(out["title"], "The Thing")
+        self.assertEqual(out["imdb_id"], "tt0084787")
 
     def test_series_uses_creator_and_episode_runtime(self):
         out = tmdb.normalise(TV_DETAILS, "series")
         self.assertEqual(out["title"], "Adventure Time")
+        self.assertEqual(out["imdb_id"], "tt1305826")
         self.assertEqual(out["director"], "Pendleton Ward")
         self.assertEqual(out["runtime"], 11)
         self.assertEqual(out["year"], 2010)

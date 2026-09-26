@@ -55,6 +55,12 @@ def _post(host: str, path: str, payload: Dict[str, Any], opener=None) -> Dict[st
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.URLError as exc:
         raise LLMError("Could not reach Ollama at {}: {}".format(host, exc.reason)) from exc
+    except TimeoutError as exc:
+        # A read timeout is an OSError, not a URLError, so it escaped as a raw
+        # traceback until this existed.
+        raise LLMError(
+            "{} did not answer within {}s. Try a smaller model, or --model."
+            .format(payload.get("model", "the model"), TIMEOUT)) from exc
 
 
 def list_models(host: str, opener=None) -> List[str]:
@@ -77,6 +83,12 @@ def generate(
         "prompt": prompt,
         "stream": False,
         "keep_alive": KEEP_ALIVE,
+        # Reasoning models otherwise spend most of their output on tokens that
+        # are thrown away: gemma4 took 126 tokens and 11.6s to answer a
+        # one-word question, against 3 tokens and 0.5s with this off. Nothing
+        # here wants visible chain-of-thought, and it only confuses the JSON
+        # parsing. Ignored by models that don't reason.
+        "think": False,
         "options": {"temperature": temperature},
     }
     if system:

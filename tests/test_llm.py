@@ -116,3 +116,54 @@ class KeepAliveTest(unittest.TestCase):
         sent, opener = self.capture()
         llm.mood_tags("http://x", "m", "Her", 2013, [], "", opener=opener)
         self.assertIn("keep_alive", sent)
+
+
+class ThinkingTest(unittest.TestCase):
+    """Reasoning models burn most of their output on tokens we discard."""
+
+    def capture(self):
+        sent = {}
+
+        def opener(request, timeout=None):
+            sent.update(json.loads(request.data.decode()))
+            return FakeResponse(json.dumps({"response": "ok"}).encode())
+
+        return sent, opener
+
+    def test_thinking_is_turned_off(self):
+        sent, opener = self.capture()
+        llm.generate("http://x", "m", "hi", opener=opener)
+        self.assertIs(sent["think"], False)
+
+    def test_mood_tagging_turns_it_off_too(self):
+        sent, opener = self.capture()
+        llm.mood_tags("http://x", "m", "Her", 2013, [], "", opener=opener)
+        self.assertIs(sent["think"], False)
+
+
+class TimeoutTest(unittest.TestCase):
+    """A slow model should report, not crash with a traceback."""
+
+    def test_a_read_timeout_is_reported_as_an_llm_error(self):
+        def opener(request, timeout=None):
+            raise TimeoutError("timed out")
+
+        with self.assertRaises(llm.LLMError) as ctx:
+            llm.generate("http://x", "m", "hi", opener=opener)
+        self.assertIn("did not answer", str(ctx.exception).lower())
+
+    def test_the_message_names_the_model_and_the_limit(self):
+        def opener(request, timeout=None):
+            raise TimeoutError("timed out")
+
+        with self.assertRaises(llm.LLMError) as ctx:
+            llm.generate("http://x", "slow-model", "hi", opener=opener)
+        self.assertIn("slow-model", str(ctx.exception))
+        self.assertIn(str(llm.TIMEOUT), str(ctx.exception))
+
+    def test_mood_tagging_survives_a_timeout(self):
+        def opener(request, timeout=None):
+            raise TimeoutError("timed out")
+
+        self.assertEqual(
+            llm.mood_tags("http://x", "m", "Her", 2013, [], "", opener=opener), [])

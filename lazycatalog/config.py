@@ -18,6 +18,9 @@ CONFIG_ENV = "LAZY_CATALOG_CONFIG"
 DEFAULTS: Dict[str, Any] = {
     "library_path": "~/TV",
     "tmdb_api_key": "",
+    # Optional. Without it there are no Rotten Tomatoes or Metacritic scores;
+    # everything else works the same.
+    "omdb_api_key": "",
     "ollama_host": "http://localhost:11434",
     # 12B is the sweet spot here: on a 24GB machine the 24B model measured
     # 20GB resident and 12.7s per call, against 8.6GB and 4.7s for this, with
@@ -27,7 +30,11 @@ DEFAULTS: Dict[str, Any] = {
     # model for `suggest` is often not the best one for `pick`: gemma3 returns
     # less obvious picks here, and twice as fast. Falls back to ollama_model if
     # it isn't installed. Empty means use ollama_model.
-    "suggest_model": "gemma3:12b",
+    # Measured on this library: gemma4 answered "slow and bleak" with Stalker,
+    # Threads and The Turin Horse where gemma3 offered Winter's Bone. Breadth of
+    # recall is what suggest needs; gemma3 stays the default elsewhere because
+    # it is faster and better at picking from a list it is handed.
+    "suggest_model": "gemma4:12b",
     "language": "en-US",
     "subtitle_languages": ["en"],
 }

@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from . import catalog, config, llm, scan, tmdb
+from . import catalog, config, llm, omdb, scan, tmdb, trash
 from .lock import AlreadyRunning, held
 
 LOCK_NAME = "run.lock"
@@ -71,6 +71,29 @@ def cmd_init(args: argparse.Namespace) -> int:
     else:
         _say("  ✓ Key works.")
 
+    _say()
+    _say("OMDb API key, for Rotten Tomatoes and Metacritic scores (optional).")
+    _say("Free at https://www.omdbapi.com/apikey.aspx — press enter to skip.")
+    current_omdb = existing.get("omdb_api_key") or ""
+    try:
+        omdb_key = getpass.getpass(
+            "OMDb key [keep existing]: " if current_omdb else "OMDb key: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        omdb_key = ""
+    omdb_key = omdb_key or current_omdb
+    if omdb_key:
+        try:
+            omdb.Client(omdb_key).verify()
+        except omdb.AuthError:
+            _say("  ✗ OMDb rejected that key. Saving without it.")
+            omdb_key = ""
+        except Exception as exc:              # network, not the key's fault
+            _say("  ! Couldn't reach OMDb to check it ({}). Saving anyway.".format(exc))
+        else:
+            _say("  ✓ Key works.")
+    else:
+        _say("  Skipped — no critic scores.")
+
     host = existing.get("ollama_host", config.DEFAULTS["ollama_host"])
     model = existing.get("ollama_model", config.DEFAULTS["ollama_model"])
     models = llm.list_models(host)
@@ -94,6 +117,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     cfg.update({
         "library_path": library,
         "tmdb_api_key": key,
+        "omdb_api_key": omdb_key,
         "ollama_host": host,
         "ollama_model": model,
     })
@@ -124,6 +148,14 @@ def _enricher(cfg: Dict[str, Any], report, use_llm: bool = True):
         client = tmdb.Client(cfg["tmdb_api_key"], cfg.get("language", "en-US"))
     except tmdb.AuthError as exc:
         report("! {}".format(exc))
+
+    # Optional: no key simply means no critic scores.
+    scorer: Optional[omdb.Client] = None
+    if cfg.get("omdb_api_key"):
+        try:
+            scorer = omdb.Client(cfg["omdb_api_key"])
+        except omdb.AuthError as exc:
+            report("! {}".format(exc))
 
     posters = config.state_dir(cfg) / "posters"
     host = cfg["ollama_host"]
@@ -163,7 +195,17 @@ def _enricher(cfg: Dict[str, Any], report, use_llm: bool = True):
                 record.setdefault("issues", []).append("no TMDB match")
                 report("  ? no TMDB match for {}".format(record["title"]))
 
-        # 3. Opinions last, and only when there's something to react to.
+        # 3. Critic scores, looked up by the IMDb id TMDB just gave us.
+        if scorer is not None and record.get("imdb_id") and not record.get("ratings"):
+            try:
+                found = scorer.ratings(record["imdb_id"])
+            except omdb.AuthError as exc:
+                report("  ! {}".format(exc))
+            else:
+                if found:
+                    record["ratings"] = found
+
+        # 4. Opinions last, and only when there's something to react to.
         if use_llm and not record.get("moods"):
             record["moods"] = llm.mood_tags(
                 host, model, record["title"], record.get("year"),
@@ -422,6 +464,86 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _match_records(records, needle: str):
+    """Records whose title or folder name contains `needle`.
+
+    An exact title match wins outright, so "Her" does not drag in
+    "Hereditary" and force you to disambiguate something unambiguous.
+    """
+    needle = needle.strip().lower()
+    if not needle:
+        return []
+    exact = [r for r in records if (r.get("title") or "").lower() == needle]
+    if exact:
+        return exact
+    return [r for r in records
+            if needle in (r.get("title") or "").lower()
+            or needle in r["key"].lower()]
+
+
+def delete_title(cfg, needle: str, force: bool = False, confirm=input,
+                 trasher=trash.move, report=_say) -> int:
+    """Move one title to the Trash and drop it from the catalogue."""
+    from . import render_md
+    from .cache import Cache
+
+    state = config.state_dir(cfg)
+    library = config.library_path(cfg)
+    cache = Cache.load(state / catalog.CACHE_NAME)
+
+    matches = _match_records(cache.ready(), needle)
+    if not matches:
+        report("Nothing in the catalogue matches {!r}.".format(needle))
+        return 1
+    if len(matches) > 1:
+        report("{!r} matches {} titles — be more specific:".format(
+            needle, len(matches)))
+        for record in matches:
+            report("  {}  ({})".format(record.get("title") or record["key"],
+                                       record["key"]))
+        return 1
+
+    record = matches[0]
+    target = library / record["key"]
+    ok, why = trash.check(target, library)
+    if not ok:
+        report(why)
+        return 1
+
+    label = record.get("title") or record["key"]
+    if record.get("year"):
+        label += " ({})".format(record["year"])
+    report("{}  {}".format(label, render_md.human_size(record.get("total_size") or 0)))
+    report("  {}".format(target))
+
+    if not force:
+        answer = confirm("Move to Trash? [y/N] ")
+        if str(answer).strip().lower() not in ("y", "yes"):
+            report("Left alone.")
+            return 1
+
+    moved, message = trasher(target)
+    if not moved:
+        report("Could not move it: {}".format(message))
+        return 1
+
+    # Only now is the record dropped: if Finder refused, the catalogue should
+    # still describe what is actually on disk.
+    cache.remove(record["key"])
+    cache.save()
+    ready = cache.ready()
+    (library / catalog.CONTENTS_NAME).write_text(
+        render_md.render(ready), encoding="utf-8")
+    catalog.write_web(cfg, ready)
+
+    report("{} — {}".format(message, label))
+    return 0
+
+
+def cmd_delete(args: argparse.Namespace) -> int:
+    return delete_title(config.load(), " ".join(args.name), force=args.force)
+
+
 def cmd_install(args: argparse.Namespace) -> int:
     from . import install as installer
 
@@ -660,6 +782,12 @@ def build_parser() -> argparse.ArgumentParser:
     server.add_argument("--no-open", action="store_true",
                         help="start the server without opening a browser")
 
+    remover = subparsers.add_parser(
+        "delete", help="move a title to the Trash and drop it from the catalogue")
+    remover.add_argument("name", nargs="+", help="part of the title or folder name")
+    remover.add_argument("--force", action="store_true",
+                         help="skip the confirmation")
+
     subparsers.add_parser("install", help="watch the library automatically (launchd)")
     subparsers.add_parser("uninstall", help="stop watching the library")
 
@@ -702,6 +830,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "web": cmd_web,
         "serve": cmd_serve,
         "suggest": cmd_suggest,
+        "delete": cmd_delete,
         "install": cmd_install,
         "uninstall": cmd_uninstall,
         "subs": cmd_subs,

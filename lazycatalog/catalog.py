@@ -141,7 +141,7 @@ def update(
 
     if enrich:
         for record in cache.ready():
-            if record.get("enriched"):
+            if not _needs_enrichment(record):
                 continue
             entry = by_key.get(record["key"])
             if entry is not None:
@@ -161,6 +161,19 @@ def update(
         "contents": contents,
         "web": web,
     }
+
+
+def _needs_enrichment(record: Dict[str, Any]) -> bool:
+    """Whether this record still has something to fetch.
+
+    Critic scores can arrive after a title was first catalogued — an OMDb key
+    added later should backfill the whole library rather than only apply to
+    new titles, and asking for a full rebuild to get them would throw away
+    everything else for no reason.
+    """
+    if not record.get("enriched"):
+        return True
+    return bool(record.get("imdb_id")) and not record.get("ratings")
 
 
 def _settle(

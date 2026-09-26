@@ -137,3 +137,24 @@ class SpecialsTest(unittest.TestCase):
         out = render_md.render([rec])
         self.assertIn("8 episodes", out)
         self.assertNotIn("specials", out)
+
+
+class CriticScoresTest(unittest.TestCase):
+    def rec(self, ratings):
+        r = cache.new_record("k", "The Thing", 1982, "film")
+        r.update(status="ready", enriched=True, rating=8.1, genres=["Horror"],
+                 ratings=ratings)
+        return r
+
+    def test_scores_appear_beside_the_tmdb_rating(self):
+        out = render_md.render([self.rec(
+            {"rotten_tomatoes": 84, "metacritic": 57, "imdb": 8.2})])
+        self.assertIn("★ 8.1", out)
+        self.assertIn("RT 84%", out)
+        self.assertIn("MC 57", out)
+        self.assertIn("IMDb 8.2", out)
+
+    def test_a_title_without_scores_reads_as_before(self):
+        out = render_md.render([self.rec({})])
+        self.assertIn("★ 8.1", out)
+        self.assertNotIn("RT ", out)

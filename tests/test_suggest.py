@@ -252,7 +252,7 @@ class SuggestModelTest(unittest.TestCase):
 
     def cfg(self, **kw):
         base = {"ollama_host": "http://x", "ollama_model": "mistral:24b",
-                "suggest_model": "gemma3:12b"}
+                "suggest_model": "gemma4:12b"}
         base.update(kw)
         return base
 
@@ -267,16 +267,16 @@ class SuggestModelTest(unittest.TestCase):
             llm.list_models = original
 
     def test_the_preferred_model_is_used_when_present(self):
-        self.assertEqual(self.patched(["gemma3:12b", "mistral:24b"]), "gemma3:12b")
+        self.assertEqual(self.patched(["gemma4:12b", "mistral:24b"]), "gemma4:12b")
         self.assertEqual(self.said, [])
 
     def test_an_absent_model_steps_down_and_says_so(self):
         self.assertEqual(self.patched(["mistral:24b"]), "mistral:24b")
         self.assertIn("isn't pulled", self.said[0])
-        self.assertIn("ollama pull gemma3:12b", self.said[0])
+        self.assertIn("ollama pull gemma4:12b", self.said[0])
 
     def test_ollama_being_unreachable_does_not_silently_switch(self):
-        self.assertEqual(self.patched([]), "gemma3:12b")
+        self.assertEqual(self.patched([]), "gemma4:12b")
         self.assertEqual(self.said, [])
 
     def test_no_override_means_no_lookup_at_all(self):

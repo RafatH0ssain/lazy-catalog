@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+
+from . import omdb
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 ANCHOR_RE = re.compile(r"<!--k:(?P<key>.+?)-->")
@@ -132,6 +134,9 @@ def _facts_line(record: Dict[str, Any]) -> str:
 
     if record.get("rating"):
         bits.append("{}★ {:.1f}".format(mark, float(record["rating"])))
+    scores = omdb.summary(record.get("ratings") or {})
+    if scores:
+        bits.append(scores)
     return " · ".join(bits)
 
 

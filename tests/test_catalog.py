@@ -218,3 +218,23 @@ class CatalogTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BackfillTest(CatalogTest):
+    """An OMDb key added later should reach titles catalogued before it."""
+
+    def test_an_enriched_title_missing_scores_is_revisited(self):
+        record = {"enriched": True, "imdb_id": "tt0084787", "ratings": {}}
+        self.assertTrue(catalog._needs_enrichment(record))
+
+    def test_an_enriched_title_with_scores_is_left_alone(self):
+        record = {"enriched": True, "imdb_id": "tt0084787",
+                  "ratings": {"rotten_tomatoes": 84}}
+        self.assertFalse(catalog._needs_enrichment(record))
+
+    def test_a_title_with_no_imdb_id_is_not_retried_forever(self):
+        record = {"enriched": True, "imdb_id": None, "ratings": {}}
+        self.assertFalse(catalog._needs_enrichment(record))
+
+    def test_an_unenriched_title_always_needs_work(self):
+        self.assertTrue(catalog._needs_enrichment({"enriched": False}))
