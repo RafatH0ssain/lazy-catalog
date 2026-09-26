@@ -49,6 +49,60 @@ class NfoTest(unittest.TestCase):
             self.assertEqual((folder / "poster.jpg").read_bytes(), b"jpegdata")
 
 
+class LooseFileNfoTest(unittest.TestCase):
+    """Kodi names a standalone film's sidecar after the file, not the folder."""
+
+    def test_the_sidecar_sits_beside_the_file_and_shares_its_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            video = Path(tmp) / "Coyote.vs.Acme.2026.1080p.mkv"
+            video.write_bytes(b"0")
+            target = nfo.write(record(title="Coyote vs Acme"), video)
+            self.assertEqual(target.name, "Coyote.vs.Acme.2026.1080p.nfo")
+            self.assertTrue(target.is_file())
+
+    def test_each_loose_film_gets_its_own_sidecar(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first = Path(tmp) / "A.2026.mkv"
+            second = Path(tmp) / "B.2026.mkv"
+            for path in (first, second):
+                path.write_bytes(b"0")
+                nfo.write(record(title=path.stem), path)
+            self.assertTrue((Path(tmp) / "A.2026.nfo").is_file())
+            self.assertTrue((Path(tmp) / "B.2026.nfo").is_file())
+
+    def test_the_poster_is_named_after_the_file_too(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            video = Path(tmp) / "A.2026.mkv"
+            video.write_bytes(b"0")
+            poster = Path(tmp) / "src.jpg"
+            poster.write_bytes(b"jpegdata")
+            nfo.write(record(), video, poster)
+            self.assertEqual((Path(tmp) / "A.2026-poster.jpg").read_bytes(),
+                             b"jpegdata")
+
+
+class RenameSuggestionTest(unittest.TestCase):
+    def test_a_loose_file_keeps_its_extension(self):
+        """Dropping .mkv from a rename would make the file unplayable."""
+        from lazycatalog import cli
+        self.assertEqual(
+            cli._ideal_name({"key": "Coyote.vs.Acme.2026.1080p.x265.mkv",
+                             "title": "Coyote vs Acme", "year": 2026}),
+            "Coyote vs Acme (2026).mkv")
+
+    def test_a_folder_gets_no_extension(self):
+        from lazycatalog import cli
+        self.assertEqual(
+            cli._ideal_name({"key": "Her (2013) [1080p]", "title": "Her",
+                             "year": 2013}),
+            "Her (2013)")
+
+    def test_a_slash_in_a_title_is_not_turned_into_a_path(self):
+        from lazycatalog import cli
+        self.assertNotIn("/", cli._ideal_name(
+            {"key": "x", "title": "Face/Off", "year": 1997}))
+
+
 class SubsTest(unittest.TestCase):
     def test_embedded_subtitles_mean_nothing_to_download(self):
         self.assertFalse(subs.needs_subtitles(record(tech={"subs": ["eng"]})))

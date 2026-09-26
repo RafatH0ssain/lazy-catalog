@@ -144,6 +144,42 @@ class CatalogTest(unittest.TestCase):
         self.run_update()
         self.assertEqual(self.cache().get("Her (2013) [1080p]")["total_size"], 5000)
 
+    # -- loose files ---------------------------------------------------
+
+    def test_a_loose_file_reaches_contents_md(self):
+        make(self.root, "Coyote.vs.Acme.2026.1080p.HEVC.x265.RMTeam.mkv")
+        self.run_update()
+        self.assertIn("**Coyote vs Acme** (2026)", self.contents())
+
+    def test_a_loose_file_records_a_playable_path(self):
+        make(self.root, "Leviticus.2026.1080p.mkv")
+        self.run_update()
+        record = self.cache().get("Leviticus.2026.1080p.mkv")
+        self.assertEqual(record["video"], "Leviticus.2026.1080p.mkv")
+
+    def test_deleting_a_loose_file_removes_it(self):
+        make(self.root, "Leviticus.2026.1080p.mkv")
+        self.run_update()
+        (self.root / "Leviticus.2026.1080p.mkv").unlink()
+        result = self.run_update()
+        self.assertEqual(result["removed"], ["Leviticus.2026.1080p.mkv"])
+
+    def test_a_loose_file_still_being_written_stays_pending(self):
+        self.run_update()
+        make(self.root, "Leviticus.2026.1080p.mkv", 100)
+        self.run_update()
+        make(self.root, "Leviticus.2026.1080p.mkv", 900)   # still growing
+        result = self.run_update()
+        self.assertIn("Leviticus.2026.1080p.mkv", result["pending"])
+
+    def test_a_finished_loose_file_publishes_on_the_next_pass(self):
+        self.run_update()
+        make(self.root, "Leviticus.2026.1080p.mkv", 500)
+        self.run_update()
+        result = self.run_update()
+        self.assertEqual(result["pending"], [])
+        self.assertIn("**Leviticus**", self.contents())
+
     def test_missing_library_raises(self):
         cfg = dict(self.cfg, library_path=str(self.root / "nope"))
         with self.assertRaises(FileNotFoundError):

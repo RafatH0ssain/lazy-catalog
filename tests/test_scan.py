@@ -83,6 +83,74 @@ class ScanTest(unittest.TestCase):
         entry = scan.scan_library(self.root)[0]
         self.assertEqual(entry.primary_video().path.name, "Film.mkv")
 
+    def test_a_loose_video_file_is_catalogued(self):
+        """Not every film arrives in its own folder."""
+        make(self.root, "Coyote.vs.Acme.2026.1080p.HEVC.x265.RMTeam.mkv", 4096)
+        entries = scan.scan_library(self.root)
+        self.assertEqual(len(entries), 1)
+        entry = entries[0]
+        self.assertEqual(entry.kind, "film")
+        self.assertEqual(entry.parsed.title, "Coyote vs Acme")
+        self.assertEqual(entry.parsed.year, 2026)
+        self.assertEqual(entry.total_size, 4096)
+        self.assertEqual(len(entry.videos), 1)
+
+    def test_a_loose_files_extension_is_not_part_of_its_title(self):
+        make(self.root, "Send Help 2026 1080p WEB-DL x265 BONE.mkv")
+        self.assertEqual(scan.scan_library(self.root)[0].parsed.title, "Send Help")
+
+    def test_the_key_of_a_loose_file_keeps_its_extension(self):
+        """The key has to name something that exists on disk."""
+        make(self.root, "Leviticus.2026.1080p.WEBRip.x265-NeoNoir.mkv")
+        self.assertEqual(scan.scan_library(self.root)[0].key,
+                         "Leviticus.2026.1080p.WEBRip.x265-NeoNoir.mkv")
+
+    def test_loose_files_and_folders_live_side_by_side(self):
+        make(self.root, "Her (2013) [1080p]/Her.mp4")
+        make(self.root, "Leviticus.2026.1080p.mkv")
+        self.assertEqual(len(scan.scan_library(self.root)), 2)
+
+    def test_a_sidecar_subtitle_beside_a_loose_file_is_found(self):
+        make(self.root, "Leviticus.2026.1080p.mkv")
+        make(self.root, "Leviticus.2026.1080p.srt")
+        self.assertTrue(scan.scan_library(self.root)[0].external_subs)
+
+    def test_a_language_tagged_sidecar_is_also_found(self):
+        make(self.root, "Leviticus.2026.mkv")
+        make(self.root, "Leviticus.2026.en.srt")
+        self.assertTrue(scan.scan_library(self.root)[0].external_subs)
+
+    def test_a_sidecar_for_a_different_film_is_not_borrowed(self):
+        make(self.root, "Leviticus.2026.mkv")
+        make(self.root, "Something Else.srt")
+        self.assertFalse(scan.scan_library(self.root)[0].external_subs)
+
+    def test_loose_non_video_files_are_not_catalogued(self):
+        make(self.root, "CONTENTS.md")
+        make(self.root, "WATCHLIST.md")
+        make(self.root, "poster.jpg")
+        self.assertEqual(scan.scan_library(self.root), [])
+
+    def test_a_partial_loose_download_is_ignored_until_it_is_renamed(self):
+        """A .part becomes a real filename when it finishes, under a new key,
+        so cataloguing it now would only create an entry that vanishes."""
+        make(self.root, "Leviticus.2026.mkv.part")
+        self.assertEqual(scan.scan_library(self.root), [])
+
+    def test_a_growing_loose_file_changes_its_signature(self):
+        path = make(self.root, "Leviticus.2026.mkv", 100)
+        first = scan.folder_signature(path)
+        make(self.root, "Leviticus.2026.mkv", 900)
+        self.assertNotEqual(first, scan.folder_signature(path))
+        self.assertTrue(first)
+
+    def test_a_loose_episode_file_is_still_one_thing_to_watch(self):
+        make(self.root, "Show.S01E01.Pilot.1080p.mkv")
+        entry = scan.scan_library(self.root)[0]
+        self.assertEqual(len(entry.videos), 1)
+        self.assertEqual(entry.primary_video().path.name,
+                         "Show.S01E01.Pilot.1080p.mkv")
+
     def test_incomplete_download_is_flagged(self):
         make(self.root, "Some Movie (2020)/movie.mkv.part")
         entry = scan.scan_library(self.root)[0]

@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from . import catalog, config, llm, tmdb
+from . import catalog, config, llm, scan, tmdb
 from .lock import AlreadyRunning, held
 
 LOCK_NAME = "run.lock"
@@ -480,11 +480,10 @@ def cmd_subs(args: argparse.Namespace) -> int:
     library = config.library_path(cfg)
     jobs = []
     for record in wanted:
-        folder = library / record["key"]
-        if not folder.is_dir():
+        target = library / record["key"]
+        if not target.exists():
             continue
-        entry = scan.scan_folder(folder)
-        for video in entry.videos:
+        for video in scan.scan_folder(target).videos:
             jobs.append((record, video.path))
 
     languages = args.lang or cfg.get("subtitle_languages") or ["en"]
@@ -535,14 +534,14 @@ def cmd_nfo(args: argparse.Namespace) -> int:
     for record in cache.ready():
         if not record.get("enriched"):
             continue
-        folder = library / record["key"]
-        if not folder.is_dir():
+        target = library / record["key"]
+        if not target.exists():
             continue
         poster = state / record["poster"] if record.get("poster") else None
-        target = nfo.write(record, folder, poster)
+        written_to = nfo.write(record, target, poster)
         written += 1
         if not args.quiet:
-            _say("  {}".format(target))
+            _say("  {}".format(written_to))
 
     _say("Wrote {} sidecar file(s). Jellyfin, Kodi and Plex will read these."
          .format(written))
@@ -558,10 +557,7 @@ def cmd_suggest_renames(args: argparse.Namespace) -> int:
 
     suggestions = []
     for record in sorted(cache.ready(), key=lambda r: r["key"].lower()):
-        title = record.get("title") or record["key"]
-        year = record.get("year")
-        ideal = "{} ({})".format(title, year) if year else title
-        ideal = ideal.replace("/", "-")
+        ideal = _ideal_name(record)
         if ideal != record["key"]:
             suggestions.append((record["key"], ideal))
 
@@ -585,6 +581,21 @@ def cmd_suggest_renames(args: argparse.Namespace) -> int:
     _say("  · `lazy-catalog nfo` gets you media-server recognition without")
     _say("    touching a single filename, which is usually the better trade.")
     return 0
+
+
+def _ideal_name(record: Dict[str, Any]) -> str:
+    """What this title's folder — or file — would ideally be called.
+
+    A loose film keeps its extension: renaming "Film.2026.mkv" to "Film (2026)"
+    would leave a file nothing can play.
+    """
+    title = (record.get("title") or record["key"]).replace("/", "-")
+    year = record.get("year")
+    ideal = "{} ({})".format(title, year) if year else title
+    suffix = Path(record["key"]).suffix
+    if suffix.lower() in scan.VIDEO_EXTS:
+        ideal += suffix
+    return ideal
 
 
 def _shell_quote(text: str) -> str:

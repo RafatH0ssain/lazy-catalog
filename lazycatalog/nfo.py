@@ -55,15 +55,25 @@ def build(record: Dict[str, Any]) -> bytes:
         ET.tostring(root, encoding="utf-8")
 
 
-def write(record: Dict[str, Any], folder: Path,
+def write(record: Dict[str, Any], target: Path,
           poster_source: Optional[Path] = None) -> Path:
-    """Write the sidecar, and copy the cached poster in beside it."""
-    name = "tvshow.nfo" if record.get("kind") == "series" else "movie.nfo"
-    target = folder / name
-    target.write_bytes(build(record))
+    """Write the sidecar, and copy the cached poster in beside it.
 
-    if poster_source and poster_source.is_file():
-        destination = folder / "poster.jpg"
-        if not destination.exists():
-            shutil.copyfile(str(poster_source), str(destination))
-    return target
+    `target` is a title's folder, or the film's own file when it has no
+    folder. A standalone file takes its sidecar's name from the file, which is
+    what Kodi and Jellyfin look for — "movie.nfo" would put one shared file in
+    the library root and every loose film would overwrite it.
+    """
+    if target.is_file():
+        destination = target.with_name(target.stem + ".nfo")
+        poster_destination = target.with_name(target.stem + "-poster.jpg")
+    else:
+        name = "tvshow.nfo" if record.get("kind") == "series" else "movie.nfo"
+        destination = target / name
+        poster_destination = target / "poster.jpg"
+
+    destination.write_bytes(build(record))
+
+    if poster_source and poster_source.is_file() and not poster_destination.exists():
+        shutil.copyfile(str(poster_source), str(poster_destination))
+    return destination

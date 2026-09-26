@@ -6,6 +6,7 @@ every later stage is layered on top of.
 
 from __future__ import annotations
 
+import glob
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -95,8 +96,37 @@ def _is_incomplete(name: str) -> bool:
     return low.endswith(INCOMPLETE_SUFFIXES)
 
 
+def _scan_file(path: Path) -> Entry:
+    """Describe a loose video file sitting directly in the library.
+
+    Plenty of films never get a folder of their own. The filename carries the
+    release name, so the title is parsed from the stem — with the extension
+    left out, or every title would end in ".mkv" — while the key keeps the
+    extension, because a key has to name something that exists on disk.
+    """
+    entry = Entry(key=path.name, path=path, kind="film",
+                  parsed=parse.parse_folder(path.stem))
+    try:
+        size = path.stat().st_size
+    except OSError:
+        entry.issues.append("could not be read")
+        return entry
+
+    entry.videos.append(VideoFile(path, size))
+    entry.total_size = size
+    # A sidecar sits next to the file rather than inside a folder, and is
+    # often language-tagged ("Film.en.srt"), so match on the stem.
+    entry.external_subs = any(
+        sibling.suffix.lower() in SUBTITLE_EXTS
+        for sibling in path.parent.glob(glob.escape(path.stem) + "*"))
+    return entry
+
+
 def scan_folder(path: Path) -> Entry:
-    """Describe a single library folder."""
+    """Describe one library item: a folder, or a loose video file."""
+    if path.is_file():
+        return _scan_file(path)
+
     parsed = parse.parse_folder(path.name)
     entry = Entry(key=path.name, path=path, kind="film", parsed=parsed)
 
@@ -175,7 +205,12 @@ def scan_folder(path: Path) -> Entry:
 
 
 def scan_library(root: Path) -> List[Entry]:
-    """Every top-level folder in the library, sorted by name."""
+    """Every title in the library: one per folder, plus any loose video file.
+
+    A partial download (".part", ".!qB") is skipped rather than catalogued as
+    pending: it is renamed to its real filename when it finishes, so an entry
+    made now would only have to be removed again under a different key.
+    """
     if not root.is_dir():
         raise FileNotFoundError("Library path does not exist: {}".format(root))
 
@@ -183,18 +218,27 @@ def scan_library(root: Path) -> List[Entry]:
     for child in sorted(root.iterdir(), key=lambda p: p.name.lower()):
         if child.name.startswith(".") or child.name == STATE_DIR_NAME:
             continue
-        if not child.is_dir():
-            continue
-        entries.append(scan_folder(child))
+        if child.is_dir():
+            entries.append(scan_folder(child))
+        elif child.suffix.lower() in VIDEO_EXTS and not _is_incomplete(child.name):
+            entries.append(scan_folder(child))
     return entries
 
 
 def folder_signature(path: Path) -> str:
-    """Cheap fingerprint of a folder's contents.
+    """Cheap fingerprint of a title's contents.
 
     Used to tell a finished download from one still being written: an unchanged
-    signature across two runs means the folder has settled.
+    signature across two runs means it has settled. A loose file is fingerprinted
+    by its own size — walking it would yield nothing and report every
+    half-written file as complete.
     """
+    if path.is_file():
+        try:
+            return "1:{}".format(path.stat().st_size)
+        except OSError:
+            return ""
+
     total = 0
     count = 0
     for root, dirnames, filenames in os.walk(path):
