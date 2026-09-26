@@ -139,7 +139,7 @@ Subtitles only download when you ask, capped at 25 files per run, because free
 providers are rate limited and one long series would spend the day's quota.
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 305 tests
+python3 -m unittest discover -s tests -t .   # 286 tests
 ```
 
 MIT.

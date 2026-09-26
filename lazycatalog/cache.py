@@ -41,6 +41,7 @@ def new_record(key: str, title: str, year: Optional[int], kind: str) -> Dict[str
         "tmdb_url": None,
         "poster": None,
         "enriched": False,
+        "enrich_version": 0,
         # local truth
         "seasons": {},
         "episode_count": 0,

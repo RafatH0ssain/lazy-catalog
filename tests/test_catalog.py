@@ -220,21 +220,27 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class BackfillTest(CatalogTest):
-    """An OMDb key added later should reach titles catalogued before it."""
+class BackfillTest(unittest.TestCase):
+    """New fields must reach titles catalogued before those fields existed."""
 
-    def test_an_enriched_title_missing_scores_is_revisited(self):
-        record = {"enriched": True, "imdb_id": "tt0084787", "ratings": {}}
+    def test_a_record_from_an_older_version_is_revisited(self):
+        record = {"enriched": True, "enrich_version": catalog.ENRICH_VERSION - 1}
         self.assertTrue(catalog._needs_enrichment(record))
 
-    def test_an_enriched_title_with_scores_is_left_alone(self):
-        record = {"enriched": True, "imdb_id": "tt0084787",
-                  "ratings": {"rotten_tomatoes": 84}}
-        self.assertFalse(catalog._needs_enrichment(record))
-
-    def test_a_title_with_no_imdb_id_is_not_retried_forever(self):
+    def test_a_record_predating_versioning_is_revisited(self):
+        """This is the real case: every title enriched before imdb_id existed."""
         record = {"enriched": True, "imdb_id": None, "ratings": {}}
+        self.assertTrue(catalog._needs_enrichment(record))
+
+    def test_a_current_record_is_left_alone(self):
+        record = {"enriched": True, "enrich_version": catalog.ENRICH_VERSION}
         self.assertFalse(catalog._needs_enrichment(record))
 
     def test_an_unenriched_title_always_needs_work(self):
         self.assertTrue(catalog._needs_enrichment({"enriched": False}))
+
+    def test_a_film_omdb_has_no_scores_for_is_not_retried_every_run(self):
+        """Absent scores are a fact about the film, not a reason to keep asking."""
+        record = {"enriched": True, "enrich_version": catalog.ENRICH_VERSION,
+                  "imdb_id": "tt1", "ratings": {}}
+        self.assertFalse(catalog._needs_enrichment(record))

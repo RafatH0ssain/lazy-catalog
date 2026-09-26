@@ -16,6 +16,12 @@ from . import config, probe, render_md, scan
 from .cache import Cache, new_record
 
 CONTENTS_NAME = "CONTENTS.md"
+
+# Bumped whenever enrichment starts collecting something it didn't before, so
+# titles catalogued under an older version are revisited once. Without this a
+# new field can never reach existing records: the first version to want an
+# IMDb id had no way to fetch one for titles that were already "enriched".
+ENRICH_VERSION = 2
 CACHE_NAME = "cache.json"
 WEB_NAME = "index.html"
 
@@ -146,6 +152,9 @@ def update(
             entry = by_key.get(record["key"])
             if entry is not None:
                 enrich(record, entry)
+                # Stamped here rather than inside the callback so the rule
+                # holds for every enricher, including the ones in tests.
+                record["enrich_version"] = ENRICH_VERSION
 
     cache.save()
 
@@ -166,14 +175,13 @@ def update(
 def _needs_enrichment(record: Dict[str, Any]) -> bool:
     """Whether this record still has something to fetch.
 
-    Critic scores can arrive after a title was first catalogued — an OMDb key
-    added later should backfill the whole library rather than only apply to
-    new titles, and asking for a full rebuild to get them would throw away
-    everything else for no reason.
+    A title is done when it was enriched by the current version. Anything
+    older is revisited once, so a field added later reaches the whole library
+    without a rebuild that would throw away watched state and mood tags.
     """
     if not record.get("enriched"):
         return True
-    return bool(record.get("imdb_id")) and not record.get("ratings")
+    return int(record.get("enrich_version") or 1) < ENRICH_VERSION
 
 
 def _settle(
