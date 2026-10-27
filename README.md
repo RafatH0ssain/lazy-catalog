@@ -42,3 +42,21 @@ lazy-catalog nfo             # Generates metadata for Plex/Jellyfin/Kodi
 * **State tracking:** Tick the boxes in `CONTENTS.md` (or `WATCHLIST.md`) to mark films as watched; the ticks survive regeneration.
 
 `lazy-catalog --help` lists the rest.
+
+## Development
+
+Run the test suite from the repo root:
+
+```bash
+python3 -m unittest discover tests/
+```
+
+Nothing needs to be installed for that. All 299 tests use only the standard library.
+
+This project has no required runtime dependencies. The optional extras change what the catalogue can do:
+
+- Without TMDB or OMDb keys, it still indexes files and builds the Markdown catalogue from local filenames and technical metadata.
+- A free TMDB key adds plot summaries, posters, and release years. Run `lazy-catalog init` and paste it, or set it later with `lazy-catalog key tmdb`.
+- An OMDb key adds Rotten Tomatoes, Metacritic, and IMDb scores (`lazy-catalog key omdb`).
+- ffmpeg adds codec, resolution, and duration details.
+- Ollama powers `lazy-pick` and `lazy-suggest`; without it those commands do not run.
