@@ -21,7 +21,7 @@ lazy-catalog update  # Builds the initial catalogue
 lazy-catalog install # Runs in background to watch for folder changes
 ```
 
-*Optional but recommended:* `brew install ffmpeg` (tech specs), [Ollama](https://ollama.com) (recommendations), `uv tool install subliminal` (subtitles). An [OMDb key](https://www.omdbapi.com/apikey.aspx) adds Rotten Tomatoes, Metacritic and IMDb scores — replace either key later with `lazy-catalog key tmdb|omdb`.
+*Optional but recommended:* `brew install ffmpeg` (tech specs), [Ollama](https://ollama.com) (recommendations), `uv tool install subliminal` (subtitles). An [OMDb key](https://www.omdbapi.com/apikey.aspx) adds Rotten Tomatoes, Metacritic and IMDb scores. Replace either key later with `lazy-catalog key tmdb|omdb`.
 
 ## Usage
 
